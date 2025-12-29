@@ -19,16 +19,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # Websocket API registrieren
     async_register_ws(hass)
 
-    # Sidebar Panel registrieren (OHNE register_static_path)
+    # Sidebar Panel registrieren (JS kommt aus /config/www -> /local/)
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom",
         sidebar_title=PANEL_TITLE,
         sidebar_icon=PANEL_ICON,
-        frontend_url_path=PANEL_URL,
+        frontend_url_path=PANEL_URL,  # muss "zutritt" sein
         config={
-            # Wichtig: relativer Pfad zur Integration
-            "module_url": f"/custom_components/{DOMAIN}/panel/zutritt-panel.js"
+            "name": "zutritt",
+            "module_url": "/local/zutritt-panel.js",
         },
         require_admin=True,
     )
