@@ -1,0 +1,1 @@
+DOMAIN = "zutritt_manager"
