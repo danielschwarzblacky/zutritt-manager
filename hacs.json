@@ -1,7 +1,0 @@
-{
-  "name": "Zutritt Manager (WG26 / ESPHome)",
-  "domain": "zutritt_manager",
-  "content_in_root": false,
-  "render_readme": true,
-  "country": "AT"
-}
