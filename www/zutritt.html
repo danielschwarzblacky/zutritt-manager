@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Zutritt Manager v3</title>
+
+  <style>
+    :root{
+      --bg:#0c1016;
+      --panel:#101726;
+      --card:#141d2e;
+      --border:rgba(255,255,255,.10);
+      --border2:rgba(255,255,255,.14);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.60);
+      --muted2:rgba(255,255,255,.72);
+      --ok:#2e7d32;
+      --bad:#b00020;
+      --warn:#b36b00;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --r12:12px;
+      --r16:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 800px at 20% 0%, rgba(93,116,255,.12), transparent 60%),
+        radial-gradient(900px 700px at 85% 20%, rgba(0,220,255,.10), transparent 55%),
+        var(--bg);
+      color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+
+    .app{
+      display:grid;
+      grid-template-columns: 340px 1fr;
+      grid-template-rows: 62px 1fr;
+      grid-template-areas:
+        "top top"
+        "side main";
+      height:100%;
+    }
+
+    @media (max-width: 980px){
+      .app{
+        grid-template-columns: 1fr;
+        grid-template-rows: 62px auto auto;
+        grid-template-areas:
+          "top"
+          "side"
+          "main";
+      }
+      .side{max-height: 42vh;}
+    }
+
+    .top{
+      grid-area: top;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 14px;
+      background: rgba(12,16,22,.88);
+      border-bottom:1px solid var(--border);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top:0;
+      z-index: 10;
+    }
+
+    .top-left{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      min-width: 0;
+    }
+
+    .brand{
+      display:flex; gap:10px; align-items:center;
+      padding:8px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background: rgba(255,255,255,.04);
+      box-shadow: var(--shadow);
+    }
+    .logo{
+      width:14px;height:14px;border-radius:50%;
+      background: linear-gradient(135deg, rgba(93,116,255,1), rgba(0,220,255,1));
+      box-shadow: 0 0 0 3px rgba(255,255,255,.06);
+    }
+    .brand b{font-size:13px; white-space:nowrap}
+    .brand span{font-size:12px;color:var(--muted);white-space:nowrap}
+
+    .pill{
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted2);
+      font-size:12px;
+    }
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--bad)}
+    .dot.warn{background:var(--warn)}
+
+    .top-right{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .btn{
+      border:1px solid var(--border2);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:9px 12px;
+      border-radius: 999px;
+      cursor:pointer;
+      font-weight: 750;
+      font-size: 13px;
+      transition: .12s ease;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{background: rgba(255,255,255,.10)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{
+      background: rgba(93,116,255,.18);
+      border-color: rgba(93,116,255,.45);
+    }
+    .btn.danger{
+      background: rgba(176,0,32,.16);
+      border-color: rgba(176,0,32,.40);
+    }
+    .btn:disabled{opacity:.45; cursor:not-allowed}
+
+    .side{
+      grid-area: side;
+      padding: 14px;
+      border-right: 1px solid var(--border);
+      background: rgba(16,23,38,.55);
+      backdrop-filter: blur(8px);
+      overflow:auto;
+    }
+    @media (max-width: 980px){
+      .side{border-right:none; border-bottom:1px solid var(--border)}
+    }
+
+    .card{
+      background: rgba(16,23,38,.65);
+      border: 1px solid var(--border);
+      border-radius: var(--r16);
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .section-title{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .section-title h2{
+      margin:0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+    }
+
+    .field{display:flex; flex-direction:column; gap:6px; margin: 10px 0;}
+    .label{font-size:12px; color: var(--muted);}
+
+    input, textarea{
+      width:100%;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.20);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: var(--r12);
+      outline:none;
+    }
+    input:focus, textarea:focus{border-color: rgba(93,116,255,.55)}
+    .hint{font-size:12px; color: var(--muted); line-height: 1.35;}
+
+    .user-list{display:flex; flex-direction:column; gap:8px; margin-top: 10px;}
+    .user-item{
+      padding:10px;
+      border-radius: var(--r12);
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      transition:.12s ease;
+    }
+    .user-item:hover{background: rgba(255,255,255,.07)}
+    .user-item.active{
+      border-color: rgba(93,116,255,.50);
+      background: rgba(93,116,255,.12);
+    }
+    .user-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px;}
+    .badge{
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      color: var(--muted2);
+      background: rgba(0,0,0,.18);
+      white-space:nowrap;
+    }
+    .badge.off{border-color: rgba(176,0,32,.45); background: rgba(176,0,32,.12); color: rgba(255,255,255,.85);}
+    .user-meta{font-size: 12px; color: var(--muted); display:flex; gap:10px; flex-wrap:wrap;}
+
+    .main{grid-area: main; padding: 14px; overflow:auto;}
+    .main-card{
+      background: rgba(16,23,38,.65);
+      border: 1px solid var(--border);
+      border-radius: var(--r16);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    /* FIX: Tabs NICHT sticky (keine Überlagerung) */
+    .tabs{
+      display:flex;
+      gap:8px;
+      padding: 10px;
+      border-bottom:1px solid var(--border);
+      background: rgba(0,0,0,.10);
+      z-index: 1;
+    }
+    .tab{
+      padding: 9px 12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.05);
+      color: var(--muted2);
+      font-weight: 800;
+      font-size: 12px;
+      cursor:pointer;
+      transition:.12s ease;
+    }
+    .tab.active{
+      background: rgba(93,116,255,.18);
+      border-color: rgba(93,116,255,.50);
+      color: var(--text);
+    }
+
+    .pane{padding: 14px;}
+    .grid-2{display:grid; grid-template-columns: 1fr 1fr; gap: 12px;}
+    @media (max-width: 900px){.grid-2{grid-template-columns: 1fr}}
+    .actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top: 10px;}
+    .statusline{font-size: 12px; color: var(--muted2); padding: 8px 0 0 0; min-height: 18px;}
+
+    .logbox{
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      border-radius: var(--r12);
+      padding: 10px;
+      max-height: 62vh;
+      overflow:auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .logrow{padding: 8px 0; border-bottom:1px dashed rgba(255,255,255,.10);}
+    .logrow:last-child{border-bottom:none}
+    .loghead{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;}
+    .when{color: var(--muted)}
+    .res.ok{color: rgba(95, 211, 141, .95)}
+    .res.bad{color: rgba(255, 107, 107, .95)}
+    .res.other{color: rgba(255, 195, 88, .95)}
+    .small{color: var(--muted); font-size: 12px}
+
+    .footer{
+      position:fixed;
+      right:10px;
+      bottom:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.65);
+      font-size: 11px;
+      backdrop-filter: blur(8px);
+      z-index: 50;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="top-left">
+        <div class="brand">
+          <div class="logo"></div>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+            <b>Zutritt Manager</b>
+            <span id="haBase">-</span>
+          </div>
+        </div>
+        <div class="pill"><span id="wsDot" class="dot bad"></span><span id="wsText">getrennt</span></div>
+        <div class="pill"><span style="color:var(--muted)">Status:</span> <span id="statusTop">Nicht verbunden</span></div>
+      </div>
+
+      <div class="top-right">
+        <button class="btn primary" id="btnConnect">Verbinden</button>
+        <button class="btn" id="btnDisconnect">Trennen</button>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <div class="section-title">
+          <h2>Benutzer</h2>
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="btnAdd">+ Neu</button>
+            <button class="btn" id="btnReload">↻</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="label">Suchen</div>
+          <input id="search" placeholder="z.B. Daniel, Papa, …"/>
+        </div>
+
+        <div class="user-list" id="userList"></div>
+
+        <div class="hint" id="leftHint" style="margin-top:10px;">
+          Nicht verbunden. Verbinde oben, um Benutzer und Log zu laden.
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="main-card">
+        <div class="tabs">
+          <button class="tab active" id="tabUsers">Benutzer</button>
+          <button class="tab" id="tabLog">Log</button>
+        </div>
+
+        <div class="pane" id="paneUsers">
+          <div class="grid-2">
+            <div class="card" style="background: rgba(0,0,0,.10);">
+              <div class="section-title">
+                <h2>Details</h2>
+                <span class="badge" id="selBadge">Kein Benutzer</span>
+              </div>
+
+              <div class="field">
+                <div class="label">Name</div>
+                <input id="uName" placeholder="Name"/>
+              </div>
+
+              <div class="field">
+                <div class="label">Aktiv</div>
+                <label style="display:flex;align-items:center;gap:10px;color:var(--muted2);">
+                  <input type="checkbox" id="uEnabled" style="width:auto;transform:scale(1.1)"/>
+                  Benutzer aktiv
+                </label>
+              </div>
+
+              <div class="field">
+                <div class="label">Gruppen (comma-separated)</div>
+                <input id="uGroups" placeholder="chef,lieferant,mitarbeiter"/>
+                <div class="hint">Gruppen schalten: <b>switch.zutritt_gruppe_…</b></div>
+              </div>
+            </div>
+
+            <div class="card" style="background: rgba(0,0,0,.10);">
+              <div class="section-title">
+                <h2>Zutrittsdaten</h2>
+                <span class="badge" id="countBadge">PIN: 0 · RFID: 0</span>
+              </div>
+
+              <div class="field">
+                <div class="label">Neue PINs setzen (comma-separated)</div>
+                <input id="uPins" placeholder="1234,9999  |  clear = alle löschen"/>
+                <div class="hint">PINs sind gehasht gespeichert → alte PINs nicht sichtbar.</div>
+              </div>
+
+              <div class="field">
+                <div class="label">RFID UIDs (comma-separated)</div>
+                <input id="uRfids" placeholder="UIDs genau wie ESPHome liefert"/>
+              </div>
+
+              <div class="actions">
+                <button class="btn primary" id="btnSave">Speichern</button>
+                <button class="btn danger" id="btnDelete">Löschen</button>
+              </div>
+              <div class="statusline" id="status">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pane" id="paneLog" style="display:none;">
+          <div class="card" style="background: rgba(0,0,0,.10);">
+            <div class="section-title">
+              <h2>Log (Backend)</h2>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn" id="btnLogReload">Neu laden</button>
+                <button class="btn danger" id="btnLogClear">Log löschen</button>
+              </div>
+            </div>
+
+            <div class="hint" style="margin-bottom:10px;">
+              Historie aus Backend (24/7). Live-Events nur bei aktiver Verbindung.
+            </div>
+
+            <div class="logbox" id="logBox"></div>
+            <div class="statusline" id="logStatus">—</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Zutritt v3 (fix)</div>
+
+<script>
+const FIXED_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4NTlmZjg1ZjJkNWM0YWY2ODQzYTIzZWM0OGVhYThkZSIsImlhdCI6MTc2NzE1ODg1NywiZXhwIjoyMDgyNTE4ODU3fQ.z1NfcwVMrTdx_gpJxslRajznaHM6BunyI3tk4rmDy9A"; // <- LLAT hier rein
+
+function getToken(){
+  if (typeof FIXED_TOKEN === "string" && FIXED_TOKEN.length > 20) return FIXED_TOKEN;
+  try{
+    const raw = localStorage.getItem("hassTokens");
+    if (!raw) return null;
+    const t = JSON.parse(raw);
+    return t?.access_token || null;
+  }catch(e){ return null; }
+}
+
+const $ = (id) => document.getElementById(id);
+
+const st = {
+  ws: null,
+  wsId: 1,
+  pending: new Map(),
+  connected: false,
+  users: [],
+  selectedId: null,
+};
+
+$("haBase").textContent = location.origin;
+
+function setWsState(ok, text, mode="bad"){
+  $("wsDot").className = "dot " + (ok ? "ok" : (mode==="warn" ? "warn" : "bad"));
+  $("wsText").textContent = text;
+  $("statusTop").textContent = ok ? "Verbunden" : text;
+}
+
+function wsUrl(){
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/api/websocket`;
+}
+
+function call(type, extra={}){
+  if (!st.ws || st.ws.readyState !== 1) return Promise.reject(new Error("Nicht verbunden"));
+  const id = st.wsId++;
+  const msg = { id, type, ...extra };
+  return new Promise((resolve, reject) => {
+    st.pending.set(id, { resolve, reject });
+    st.ws.send(JSON.stringify(msg));
+    setTimeout(() => {
+      if (st.pending.has(id)){
+        st.pending.delete(id);
+        reject(new Error("Timeout bei " + type));
+      }
+    }, 9000);
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function renderList(){
+  const q = ($("search").value || "").trim().toLowerCase();
+  const list = $("userList");
+  list.innerHTML = "";
+
+  const users = (st.users || [])
+    .slice()
+    .sort((a,b)=> (a.name||"").localeCompare(b.name||""))
+    .filter(u => !q || (u.name||"").toLowerCase().includes(q));
+
+  $("leftHint").textContent = !st.connected
+    ? "Nicht verbunden. Verbinde oben, um Benutzer und Log zu laden."
+    : (users.length ? `${users.length} Benutzer` : "Keine Benutzer vorhanden.");
+
+  users.forEach(u => {
+    const div = document.createElement("div");
+    div.className = "user-item" + (u.id === st.selectedId ? " active" : "");
+    const enabled = !!u.enabled;
+    div.innerHTML = `
+      <div class="user-top">
+        <div style="font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(u.name||"(ohne Name)")}</div>
+        <span class="badge ${enabled ? "" : "off"}">${enabled ? "aktiv" : "inaktiv"}</span>
+      </div>
+      <div class="user-meta">
+        <span>Gruppen: ${(u.groups||[]).join(",") || "-"}</span>
+        <span>PIN: ${(u.pin_hashes||[]).length || 0}</span>
+        <span>RFID: ${(u.rfids||[]).length || 0}</span>
+      </div>
+    `;
+    div.onclick = () => {
+      st.selectedId = u.id;
+      renderList();
+      renderEditor();
+    };
+    list.appendChild(div);
+  });
+}
+
+function renderEditor(){
+  const u = (st.users || []).find(x => x.id === st.selectedId);
+
+  $("btnSave").disabled = !st.connected || !u;
+  $("btnDelete").disabled = !st.connected || !u;
+
+  if (!u){
+    $("selBadge").textContent = "Kein Benutzer";
+    $("countBadge").textContent = "PIN: 0 · RFID: 0";
+    $("uName").value = "";
+    $("uEnabled").checked = true;
+    $("uGroups").value = "";
+    $("uPins").value = "";
+    $("uRfids").value = "";
+    $("status").textContent = st.connected ? "Kein Benutzer ausgewählt" : "Nicht verbunden";
+    return;
+  }
+
+  $("selBadge").textContent = u.name || "(ohne Name)";
+  $("countBadge").textContent = `PIN: ${(u.pin_hashes||[]).length || 0} · RFID: ${(u.rfids||[]).length || 0}`;
+  $("uName").value = u.name || "";
+  $("uEnabled").checked = !!u.enabled;
+  $("uGroups").value = (u.groups || []).join(",");
+  $("uPins").value = "";
+  $("uRfids").value = (u.rfids || []).join(",");
+  $("status").textContent = "Bereit";
+}
+
+function addLogLine(e){
+  const box = $("logBox");
+  const when = e.time ? new Date(e.time).toLocaleString("de-AT") : new Date().toLocaleString("de-AT");
+  const res = String(e.result || "").toLowerCase();
+  const klass = (res === "granted") ? "ok" : (res === "denied" ? "bad" : "other");
+
+  const div = document.createElement("div");
+  div.className = "logrow";
+  div.innerHTML = `
+    <div class="loghead">
+      <div class="when">${escapeHtml(when)}</div>
+      <div class="res ${klass}">${escapeHtml(e.source||"?")} · ${escapeHtml(e.type||"?")} · ${escapeHtml(e.result||"?")}</div>
+    </div>
+    <div class="small">User: <b>${escapeHtml(e.user||"-")}</b> · Gruppen: ${escapeHtml(JSON.stringify(e.groups||[]))}</div>
+  `;
+  box.prepend(div);
+  while (box.children.length > 200) box.removeChild(box.lastChild);
+}
+
+async function loadUsers(){
+  const res = await call("zutritt_manager/get_state");
+  st.users = Array.isArray(res.users) ? res.users : [];
+  if (!st.selectedId && st.users.length) st.selectedId = st.users[0].id;
+  if (st.selectedId && !st.users.some(u => u.id === st.selectedId)) st.selectedId = st.users[0]?.id || null;
+  renderList();
+  renderEditor();
+}
+
+async function loadLog(){
+  $("logStatus").textContent = "Lade…";
+  $("logBox").innerHTML = "";
+  const res = await call("zutritt_manager/get_log");
+  const log = Array.isArray(res.log) ? res.log : [];
+  log.slice().reverse().forEach(addLogLine);
+  $("logStatus").textContent = `Geladen: ${log.length}`;
+}
+
+async function addUser(){
+  const name = prompt("Neuer Benutzername:");
+  if (!name) return;
+  $("status").textContent = "Lege an…";
+  await call("zutritt_manager/add_user", { name });
+  await loadUsers();
+  $("status").textContent = "Angelegt";
+}
+
+async function saveUser(){
+  const u = (st.users || []).find(x => x.id === st.selectedId);
+  if (!u) return;
+
+  const pins = ($("uPins").value || "").trim();
+  const payload = {
+    user_id: u.id,
+    name: ($("uName").value || "").trim(),
+    enabled: !!$("uEnabled").checked,
+    groups_csv: ($("uGroups").value || "").trim(),
+    rfids_csv: ($("uRfids").value || "").trim(),
+    pins_csv: pins ? pins : "__KEEP__"
+  };
+
+  $("status").textContent = "Speichere…";
+  await call("zutritt_manager/update_user", payload);
+  $("uPins").value = "";
+  await loadUsers();
+  $("status").textContent = "Gespeichert";
+}
+
+async function deleteUser(){
+  const u = (st.users || []).find(x => x.id === st.selectedId);
+  if (!u) return;
+  if (!confirm(`"${u.name}" wirklich löschen?`)) return;
+  $("status").textContent = "Lösche…";
+  await call("zutritt_manager/delete_user", { user_id: u.id });
+  st.selectedId = null;
+  await loadUsers();
+  $("status").textContent = "Gelöscht";
+}
+
+async function clearLog(){
+  if (!confirm("Log wirklich löschen?")) return;
+  await call("zutritt_manager/clear_log");
+  await loadLog();
+}
+
+function showTab(which){
+  const users = (which === "users");
+  $("tabUsers").classList.toggle("active", users);
+  $("tabLog").classList.toggle("active", !users);
+  $("paneUsers").style.display = users ? "" : "none";
+  $("paneLog").style.display = users ? "none" : "";
+}
+
+$("tabUsers").onclick = () => showTab("users");
+$("tabLog").onclick = () => showTab("log");
+
+function connect(){
+  const token = getToken();
+  if (!token){
+    setWsState(false, "kein Token", "warn");
+    alert("Kein Token verfügbar. iOS: FIXED_TOKEN setzen. Browser: eingeloggt öffnen.");
+    return;
+  }
+
+  setWsState(false, "verbinde…", "warn");
+  $("status").textContent = "Verbinde…";
+
+  const ws = new WebSocket(wsUrl());
+  st.ws = ws;
+
+  ws.onopen = () => ws.send(JSON.stringify({ type:"auth", access_token: token }));
+
+  ws.onmessage = async (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e) { return; }
+
+    if (msg.type === "auth_ok"){
+      st.connected = true;
+      setWsState(true, "verbunden");
+      $("status").textContent = "Verbunden";
+
+      ws.send(JSON.stringify({ id: st.wsId++, type:"subscribe_events", event_type:"zutritt_manager.access" }));
+
+      await loadUsers();
+      await loadLog();
+      return;
+    }
+
+    if (msg.type === "auth_invalid"){
+      st.connected = false;
+      setWsState(false, "auth_invalid");
+      $("status").textContent = "Auth ungültig";
+      return;
+    }
+
+    if (msg.type === "event" && msg.event?.event_type === "zutritt_manager.access"){
+      addLogLine({ ...(msg.event.data||{}), time: new Date().toISOString() });
+      return;
+    }
+
+    if (typeof msg.id === "number" && st.pending.has(msg.id)){
+      const { resolve, reject } = st.pending.get(msg.id);
+      st.pending.delete(msg.id);
+      if (msg.type === "result") resolve(msg.result);
+      else reject(new Error(msg.error?.message || "WS error"));
+    }
+  };
+
+  ws.onclose = () => {
+    st.connected = false;
+    setWsState(false, "getrennt");
+    $("status").textContent = "Getrennt";
+    renderList();
+    renderEditor();
+  };
+}
+
+function disconnect(){
+  try { st.ws?.close(); } catch(e){}
+  st.ws = null;
+}
+
+$("btnConnect").onclick = connect;
+$("btnDisconnect").onclick = disconnect;
+
+$("btnAdd").onclick = () => addUser().catch(e => $("status").textContent = String(e));
+$("btnReload").onclick = () => loadUsers().catch(e => $("status").textContent = String(e));
+$("btnSave").onclick = () => saveUser().catch(e => $("status").textContent = String(e));
+$("btnDelete").onclick = () => deleteUser().catch(e => $("status").textContent = String(e));
+
+$("btnLogReload").onclick = () => loadLog().catch(e => $("logStatus").textContent = String(e));
+$("btnLogClear").onclick = () => clearLog().catch(e => $("logStatus").textContent = String(e));
+
+$("search").oninput = renderList;
+
+setWsState(false, "getrennt");
+$("status").textContent = "—";
+$("logStatus").textContent = "—";
+renderList();
+renderEditor();
+</script>
+
+</body>
+</html>
