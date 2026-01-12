@@ -33,8 +33,7 @@
     .btn.danger{background:rgba(176,0,32,.22);border-color:rgba(176,0,32,.40)}
     .btn.primary{background:rgba(46,125,50,.22);border-color:rgba(46,125,50,.40)}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    input[type="text"], textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);outline:none}
-    textarea{min-height:220px;font-family:var(--mono);font-size:12px}
+    input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);outline:none}
     label{display:block;margin-top:10px;font-size:12px;color:var(--muted)}
     .hint{margin-top:6px;font-size:12px;color:var(--muted2);line-height:1.35}
     .list{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 320px);overflow:auto;padding-right:6px}
@@ -51,10 +50,24 @@
     .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     @media(max-width:980px){.two{grid-template-columns:1fr}}
     .banner{margin-top:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.05)}
-    .banner b{color:var(--text)}
     .mono{font-family:var(--mono)}
     .chk{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.03)}
     .chk:hover{background:rgba(255,255,255,.05)}
+    .log{font-family:var(--mono);font-size:12px;white-space:pre-wrap;line-height:1.35;background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:12px;padding:10px;min-height:180px}
+    .logline{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.08)}
+    .logline:last-child{border-bottom:none}
+    .logtime{color:var(--muted2);min-width:160px}
+    .logok{color:rgba(46,125,50,.95)} .logbad{color:rgba(176,0,32,.95)}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    @media(max-width:980px){.kpi{grid-template-columns:repeat(2,1fr)}}
+    .kpic{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.04)}
+    .kpic .n{font-size:22px;font-weight:800}
+    .kpic .l{font-size:12px;color:var(--muted2);margin-top:4px}
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px;margin-top:10px}
+    .table th{font-size:12px;color:var(--muted);text-align:left;font-weight:800;padding:0 10px}
+    .table td{padding:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04)}
+    .table td:first-child{border-top-left-radius:12px;border-bottom-left-radius:12px}
+    .table td:last-child{border-top-right-radius:12px;border-bottom-right-radius:12px}
   </style>
 </head>
 
@@ -64,8 +77,7 @@
     <div class="sub">
       <span class="pill"><span id="wsDot" class="dot bad"></span> <span id="wsState">getrennt</span></span>
       <span class="pill">Quelle: <span id="haBase"></span></span>
-      <span class="pill">Integration: <span id="intState" class="small">offline</span></span>
-      <span class="pill">Event: <span class="small">zutritt_manager.access</span></span>
+      <span class="pill">30 Tage Log: <span id="logCount" class="small">0</span></span>
     </div>
 
     <div class="banner">
@@ -86,9 +98,7 @@
         <div class="spacer"></div>
         <span class="small" id="tokenState">Auto: nicht geprüft</span>
       </div>
-      <div class="hint">
-        Empfehlung: Auto nutzen. Wenn das nicht geht: LLAT speichern.
-      </div>
+      <div class="hint">Empfehlung: Auto nutzen. Wenn das nicht geht: LLAT speichern.</div>
     </div>
   </div>
 
@@ -115,10 +125,11 @@
         <div class="tabs">
           <button class="tab active" data-tab="user">Benutzer</button>
           <button class="tab" data-tab="groups">Gruppen</button>
-          <button class="tab" data-tab="config">Konfiguration</button>
+          <button class="tab" data-tab="log">Log</button>
+          <button class="tab" data-tab="stats">Statistik</button>
         </div>
 
-        <!-- USER TAB -->
+        <!-- USER -->
         <div id="tab-user">
           <div class="two">
             <div>
@@ -133,7 +144,7 @@
 
               <label>Gruppen (Checkboxen)</label>
               <div id="uGroupsBox" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
-              <div class="hint">Gruppen legst du im Tab „Gruppen“ an/ab.</div>
+              <div class="hint">Gruppen legst du im Tab „Gruppen“ an/ab. Groß/Klein egal.</div>
             </div>
 
             <div>
@@ -146,7 +157,6 @@
 
               <label>RFID UIDs (comma-separated)</label>
               <input type="text" id="uRfids" placeholder="12345678,87654321" />
-              <div class="hint">UIDs exakt so eintragen, wie ESPHome sie liefert.</div>
             </div>
           </div>
 
@@ -158,11 +168,10 @@
           </div>
         </div>
 
-        <!-- GROUPS TAB -->
+        <!-- GROUPS -->
         <div id="tab-groups" style="display:none">
           <div class="hint">
-            Hier kannst du Gruppen als reine Namen anlegen (z.B. <span class="mono">Champions</span>, <span class="mono">chef</span>).
-            Diese Namen landen direkt im Event und sind perfekt für Automationen.
+            Gruppen sind reine Namen (z.B. <span class="mono">champions</span>, <span class="mono">chef</span>). Groß/Klein wird ignoriert.
           </div>
 
           <label>Neue Gruppe</label>
@@ -181,20 +190,54 @@
           </div>
         </div>
 
-        <!-- CONFIG TAB -->
-        <div id="tab-config" style="display:none">
-          <div class="hint">
-            Konfiguration (sources / group_booleans). Gruppenverwaltung ist im eigenen Tab.
+        <!-- LOG -->
+        <div id="tab-log" style="display:none">
+          <div class="row wrap">
+            <div class="hint">Log aus deiner 30-Tage Datei (beim Verbinden eingelesen).</div>
+            <div class="spacer"></div>
+            <button class="btn" id="btnLogRefresh">↻ Aktualisieren</button>
+          </div>
+          <div class="log" id="logBox" style="margin-top:10px"></div>
+          <div class="row wrap" style="margin-top:14px">
+            <span class="small" id="logStatus">Nicht verbunden</span>
+            <div class="spacer"></div>
+            <button class="btn" id="btnLogTop">Top (neueste oben)</button>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div id="tab-stats" style="display:none">
+          <div class="hint">Statistik aus dem 30-Tage Log. (Neueste Daten = genauer)</div>
+
+          <div class="kpi" style="margin-top:10px">
+            <div class="kpic"><div class="n" id="kAll">0</div><div class="l">30 Tage – Gesamt</div></div>
+            <div class="kpic"><div class="n" id="kGranted">0</div><div class="l">30 Tage – Granted</div></div>
+            <div class="kpic"><div class="n" id="kDenied">0</div><div class="l">30 Tage – Denied</div></div>
+            <div class="kpic"><div class="n" id="kToday">0</div><div class="l">Heute – Gesamt</div></div>
           </div>
 
-          <label>Config JSON</label>
-          <textarea id="cfg"></textarea>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Top User</th><th>Count</th><th>Top Gruppen</th><th>Count</th>
+              </tr>
+            </thead>
+            <tbody id="statsTop"></tbody>
+          </table>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Quelle</th><th>Granted</th><th>Denied</th><th>Gesamt</th>
+              </tr>
+            </thead>
+            <tbody id="statsSources"></tbody>
+          </table>
 
           <div class="row wrap" style="margin-top:14px">
-            <button class="btn primary" id="btnCfgSave">Konfig speichern</button>
-            <button class="btn" id="btnCfgReset">Neu laden</button>
+            <button class="btn" id="btnStatsRecalc">↻ Neu berechnen</button>
             <div class="spacer"></div>
-            <span class="small" id="cfgStatus">Nicht verbunden</span>
+            <span class="small" id="statsStatus">Nicht verbunden</span>
           </div>
         </div>
 
@@ -211,14 +254,11 @@
     selectedId: null,
     users: [],
     groups: [],
-    sources: {},
-    group_booleans: {},
+    access_log: [],
     ws: null,
     wsId: 1,
     pending: new Map(),
     connected: false,
-    authFailed: false,
-    subscribed: false,
   };
 
   $("haBase").textContent = state.haBase;
@@ -226,11 +266,11 @@
   function setWsUI(ok, text){
     $("wsDot").className = "dot " + (ok ? "ok" : "bad");
     $("wsState").textContent = text;
-    $("intState").textContent = ok ? "online" : "offline";
   }
   function setStatus(t){ $("status").textContent = t; }
-  function setCfgStatus(t){ $("cfgStatus").textContent = t; }
   function setGroupsStatus(t){ $("groupsStatus").textContent = t; }
+  function setLogStatus(t){ $("logStatus").textContent = t; }
+  function setStatsStatus(t){ $("statsStatus").textContent = t; }
   function setTokenState(t){ $("tokenState").textContent = t; }
 
   function wsUrl(){
@@ -242,7 +282,6 @@
     try { if (state.ws) state.ws.close(); } catch(e){}
     state.ws = null;
     state.connected = false;
-    state.subscribed = false;
     setWsUI(false, "getrennt");
   }
 
@@ -251,24 +290,17 @@
       const raw = localStorage.getItem("hassTokens");
       if (!raw) return null;
       return JSON.parse(raw);
-    } catch(e){
-      return null;
-    }
+    } catch(e){ return null; }
   }
-
   function getAutoToken(){
     const t = getTokens();
     return t && t.access_token ? t.access_token : null;
   }
-
   function getManualToken(){
     const t = localStorage.getItem("zutritt_manager_llat");
     return t && t.trim() ? t.trim() : null;
   }
-
-  function getBestToken(){
-    return getAutoToken() || getManualToken();
-  }
+  function getBestToken(){ return getAutoToken() || getManualToken(); }
 
   function call(type, extra = {}){
     if (!state.ws || state.ws.readyState !== 1) {
@@ -292,7 +324,8 @@
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === which));
     $("tab-user").style.display = which === "user" ? "" : "none";
     $("tab-groups").style.display = which === "groups" ? "" : "none";
-    $("tab-config").style.display = which === "config" ? "" : "none";
+    $("tab-log").style.display = which === "log" ? "" : "none";
+    $("tab-stats").style.display = which === "stats" ? "" : "none";
   }
 
   function renderList(){
@@ -418,7 +451,7 @@
 
     $("uName").value = u.name || "";
     $("uEnabled").checked = !!u.enabled;
-    $("uPins").value = ""; // bewusst nie anzeigen
+    $("uPins").value = "";
     $("uRfids").value = (u.rfids || []).join(",");
     renderGroupsCheckboxes(u.groups || []);
     setStatus("Bereit");
@@ -466,9 +499,173 @@
     });
   }
 
-  function renderConfig(){
-    $("cfg").value = JSON.stringify({ sources: state.sources, group_booleans: state.group_booleans }, null, 2);
-    setCfgStatus(state.connected ? "Bereit" : "Nicht verbunden");
+  function parseEventTime(ev){
+    // Unterstützt viele Formate: epoch ms/sec, ISO, "12.1.2026, 04:41:24", etc.
+    const v = ev?.ts ?? ev?.time ?? ev?.dt ?? ev?.date ?? ev?.timestamp ?? null;
+    if (v === null || v === undefined) return null;
+
+    if (typeof v === "number"){
+      // seconds vs ms
+      return new Date(v < 10_000_000_000 ? v * 1000 : v);
+    }
+    if (typeof v === "string"){
+      // Versuch 1: ISO
+      const d1 = new Date(v);
+      if (!isNaN(d1.getTime())) return d1;
+
+      // Versuch 2: "12.1.2026, 04:41:24"
+      const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (m){
+        const dd = parseInt(m[1],10);
+        const mm = parseInt(m[2],10)-1;
+        const yy = parseInt(m[3],10);
+        const HH = parseInt(m[4],10);
+        const MI = parseInt(m[5],10);
+        const SS = parseInt(m[6],10);
+        return new Date(yy, mm, dd, HH, MI, SS);
+      }
+    }
+    return null;
+  }
+
+  function fmtDate(d){
+    try { return d.toLocaleString("de-AT"); } catch(e){ return String(d); }
+  }
+
+  function renderLog(){
+    const box = $("logBox");
+    box.innerHTML = "";
+
+    const entries = (state.access_log || []).slice();
+    // neueste oben
+    entries.sort((a,b)=>{
+      const da = parseEventTime(a)?.getTime() ?? 0;
+      const db = parseEventTime(b)?.getTime() ?? 0;
+      return db - da;
+    });
+
+    $("logCount").textContent = String(entries.length);
+
+    if (!entries.length){
+      box.textContent = "Kein Log vorhanden.";
+      return;
+    }
+
+    for (const ev of entries.slice(0, 300)){
+      const div = document.createElement("div");
+      div.className = "logline";
+
+      const dt = parseEventTime(ev);
+      const left = document.createElement("div");
+      left.className = "logtime";
+      left.textContent = dt ? fmtDate(dt) : "-";
+
+      const right = document.createElement("div");
+      const res = (ev?.result || "").toLowerCase();
+      right.className = (res === "granted") ? "logok" : "logbad";
+
+      const src = ev?.source || "?";
+      const typ = ev?.type || "?";
+      const result = ev?.result || "?";
+      const user = ev?.user || "-";
+      const groups = Array.isArray(ev?.groups) ? ev.groups : (ev?.groups ? [ev.groups] : []);
+      right.textContent = `${src} · ${typ} · ${result} | User: ${user} | Gruppen: ${JSON.stringify(groups)}`;
+
+      div.appendChild(left);
+      div.appendChild(right);
+      box.appendChild(div);
+    }
+
+    setLogStatus(`Angezeigt: ${Math.min(300, entries.length)} / ${entries.length}`);
+  }
+
+  function topN(map, n){
+    return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  }
+
+  function renderStats(){
+    const entries = (state.access_log || []).slice();
+    const now = new Date();
+    const start30 = new Date(now.getTime() - 30*24*60*60*1000);
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0);
+
+    let all=0, granted=0, denied=0, today=0;
+
+    const perUser = new Map();
+    const perGroup = new Map();
+    const perSource = new Map(); // source -> {g,d,t}
+
+    for (const ev of entries){
+      const dt = parseEventTime(ev);
+      if (!dt) continue;
+      if (dt < start30) continue;
+
+      all++;
+      const res = (ev?.result || "").toLowerCase();
+      if (res === "granted") granted++;
+      else denied++;
+
+      if (dt >= startToday) today++;
+
+      const user = ev?.user || "-";
+      perUser.set(user, (perUser.get(user) || 0) + 1);
+
+      const groups = Array.isArray(ev?.groups) ? ev.groups : (ev?.groups ? [ev.groups] : []);
+      for (const g of groups){
+        const gg = String(g || "-");
+        perGroup.set(gg, (perGroup.get(gg) || 0) + 1);
+      }
+
+      const src = ev?.source || "?";
+      const obj = perSource.get(src) || { granted:0, denied:0, total:0 };
+      obj.total++;
+      if (res === "granted") obj.granted++; else obj.denied++;
+      perSource.set(src, obj);
+    }
+
+    $("kAll").textContent = String(all);
+    $("kGranted").textContent = String(granted);
+    $("kDenied").textContent = String(denied);
+    $("kToday").textContent = String(today);
+
+    // Top user / top groups
+    const topUser = topN(perUser, 5);
+    const topGroup = topN(perGroup, 5);
+
+    const tbody = $("statsTop");
+    tbody.innerHTML = "";
+
+    const rows = Math.max(topUser.length, topGroup.length, 1);
+    for (let i=0;i<rows;i++){
+      const tr = document.createElement("tr");
+
+      const tu = topUser[i] || ["-", 0];
+      const tg = topGroup[i] || ["-", 0];
+
+      const td1 = document.createElement("td"); td1.textContent = tu[0];
+      const td2 = document.createElement("td"); td2.textContent = String(tu[1]);
+      const td3 = document.createElement("td"); td3.textContent = tg[0];
+      const td4 = document.createElement("td"); td4.textContent = String(tg[1]);
+
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      tbody.appendChild(tr);
+    }
+
+    // Sources
+    const sbody = $("statsSources");
+    sbody.innerHTML = "";
+    const srcSorted = Array.from(perSource.entries()).sort((a,b)=>b[1].total-a[1].total);
+    for (const [src, o] of srcSorted){
+      const tr = document.createElement("tr");
+      const td1 = document.createElement("td"); td1.textContent = src;
+      const td2 = document.createElement("td"); td2.textContent = String(o.granted);
+      const td3 = document.createElement("td"); td3.textContent = String(o.denied);
+      const td4 = document.createElement("td"); td4.textContent = String(o.total);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      sbody.appendChild(tr);
+    }
+
+    setStatsStatus(`Berechnet aus ${all} Events (letzte 30 Tage)`);
   }
 
   async function loadAll(){
@@ -476,11 +673,13 @@
     try{
       setStatus("Lade…");
       setGroupsStatus("Lade…");
+      setLogStatus("Lade…");
+      setStatsStatus("Lade…");
+
       const st = await call("zutritt_manager/get_state");
       state.users = Array.isArray(st.users) ? st.users : [];
       state.groups = Array.isArray(st.groups) ? st.groups : [];
-      state.sources = st.sources && typeof st.sources === "object" ? st.sources : {};
-      state.group_booleans = st.group_booleans && typeof st.group_booleans === "object" ? st.group_booleans : {};
+      state.access_log = Array.isArray(st.access_log) ? st.access_log : [];
 
       if (!state.selectedId && state.users.length) state.selectedId = state.users[0].id;
       if (state.selectedId && !state.users.some(u => u.id === state.selectedId)) state.selectedId = state.users[0]?.id || null;
@@ -488,13 +687,16 @@
       renderList();
       renderEditor();
       renderGroupsList();
-      renderConfig();
+      renderLog();
+      renderStats();
 
       setStatus("Geladen");
       setGroupsStatus("Geladen");
     } catch(e){
       setStatus("Fehler: " + e.message);
       setGroupsStatus("Fehler: " + e.message);
+      setLogStatus("Fehler: " + e.message);
+      setStatsStatus("Fehler: " + e.message);
       console.error(e);
     }
   }
@@ -562,28 +764,6 @@
     }
   }
 
-  async function saveConfig(){
-    if (!state.connected) return;
-    setCfgStatus("Speichere…");
-    let obj;
-    try{
-      obj = JSON.parse($("cfg").value);
-    } catch(e){
-      setCfgStatus("JSON Fehler: " + e.message);
-      return;
-    }
-    try{
-      await call("zutritt_manager/set_config", {
-        sources: obj.sources || {},
-        group_booleans: obj.group_booleans || {}
-      });
-      await loadAll();
-      setCfgStatus("Gespeichert");
-    } catch(e){
-      setCfgStatus("Fehler: " + e.message);
-    }
-  }
-
   async function addGroup(){
     if (!state.connected) return;
     const g = $("newGroup").value.trim();
@@ -607,12 +787,8 @@
       return;
     }
 
-    state.authFailed = false;
     safeClose();
     setWsUI(false, "verbinde…");
-    setStatus("Verbinde…");
-    setGroupsStatus("Verbinde…");
-    setCfgStatus("Verbinde…");
 
     const ws = new WebSocket(wsUrl());
     state.ws = ws;
@@ -633,11 +809,8 @@
 
       if (msg.type === "auth_invalid"){
         state.connected = false;
-        state.authFailed = true;
         setWsUI(false, "auth_invalid");
         setStatus("Auth fehlgeschlagen (Token falsch).");
-        setGroupsStatus("Auth fehlgeschlagen.");
-        setCfgStatus("Auth fehlgeschlagen.");
         safeClose();
         return;
       }
@@ -656,7 +829,8 @@
       setWsUI(false, "getrennt");
       setStatus("Getrennt.");
       setGroupsStatus("Getrennt.");
-      setCfgStatus("Getrennt.");
+      setLogStatus("Getrennt.");
+      setStatsStatus("Getrennt.");
     };
 
     ws.onerror = () => {
@@ -670,39 +844,35 @@
     safeClose();
     setStatus("Getrennt");
     setGroupsStatus("Getrennt");
-    setCfgStatus("Getrennt");
+    setLogStatus("Getrennt");
+    setStatsStatus("Getrennt");
   }
 
-  // Tabs
+  // UI wire-up
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
-
-  // Buttons
   $("btnReload").addEventListener("click", () => loadAll());
   $("btnAdd").addEventListener("click", () => addUser());
   $("btnSave").addEventListener("click", () => saveUser());
   $("btnDelete").addEventListener("click", () => deleteUser());
-  $("btnCfgSave").addEventListener("click", () => saveConfig());
-  $("btnCfgReset").addEventListener("click", () => renderConfig());
-
   $("btnGroupsReload").addEventListener("click", () => loadAll());
   $("btnAddGroup").addEventListener("click", () => addGroup());
   $("newGroup").addEventListener("keydown", (e) => { if (e.key === "Enter") addGroup(); });
-
   $("search").addEventListener("input", () => renderList());
 
-  // Token UI
+  $("btnLogRefresh").addEventListener("click", () => loadAll());
+  $("btnLogTop").addEventListener("click", () => renderLog());
+  $("btnStatsRecalc").addEventListener("click", () => renderStats());
+
   $("btnAutoToken").addEventListener("click", () => {
     const t = getAutoToken();
     setTokenState(t ? "Auto-Token gefunden" : "Auto-Token nicht vorhanden");
   });
-
   $("btnSaveToken").addEventListener("click", () => {
     const t = $("manualToken").value.trim();
     if (!t) { setTokenState("Nichts eingegeben"); return; }
     localStorage.setItem("zutritt_manager_llat", t);
     setTokenState("Manueller Token gespeichert");
   });
-
   $("btnClearToken").addEventListener("click", () => {
     localStorage.removeItem("zutritt_manager_llat");
     $("manualToken").value = "";
@@ -712,12 +882,13 @@
   $("btnConnect").addEventListener("click", () => connect());
   $("btnDisconnect").addEventListener("click", () => disconnect());
 
-  // Initial state
+  // initial
   setWsUI(false, "getrennt");
-  setStatus("Nicht verbunden (oben Verbinden klicken)");
+  setStatus("Nicht verbunden");
   setGroupsStatus("Nicht verbunden");
-  setCfgStatus("Nicht verbunden");
-
+  setLogStatus("Nicht verbunden");
+  setStatsStatus("Nicht verbunden");
+  $("logCount").textContent = "0";
   const hasAuto = !!getAutoToken();
   const hasManual = !!getManualToken();
   setTokenState(`Auto: ${hasAuto ? "ja" : "nein"} | Manuell: ${hasManual ? "ja" : "nein"}`);
