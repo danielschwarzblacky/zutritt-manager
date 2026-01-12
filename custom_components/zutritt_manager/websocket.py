@@ -15,12 +15,11 @@ def _split_csv(s: str) -> list[str]:
 
 
 def _norm_group(g: str) -> str:
-    # erlaubt "Champions", "chef", "lieferant" usw.
-    # trim, interne Mehrspaces weg, keine Kommas
+    # Case-insensitive: canonical lowercase
     g = (g or "").strip()
     g = " ".join(g.split())
     g = g.replace(",", "")
-    return g
+    return g.lower()
 
 
 def _hash_pin(salt: str, pin: str) -> str:
@@ -35,20 +34,21 @@ def _ensure_base_state(st: dict) -> dict:
     st.setdefault("users", [])
     st.setdefault("sources", {})
     st.setdefault("group_booleans", {})
-    st.setdefault("groups", [])  # ✅ zentrale Gruppenliste
+    st.setdefault("groups", [])       # zentrale Gruppenliste
+    st.setdefault("access_log", [])   # ✅ Log der letzten 30 Tage (wenn vorhanden)
     return st
 
 
 def _sync_groups_from_users(st: dict) -> None:
-    """Sammelt Gruppen aus Users ein und ergänzt st['groups']."""
     groups = st.setdefault("groups", [])
-    known = set(groups)
+    known = set(_norm_group(x) for x in groups)
     for u in st.get("users", []):
         for g in u.get("groups", []) or []:
             gg = _norm_group(g)
             if gg and gg not in known:
                 known.add(gg)
                 groups.append(gg)
+    groups[:] = sorted(set(_norm_group(x) for x in groups if _norm_group(x)))
 
 
 def async_register_ws(hass):
@@ -61,20 +61,29 @@ def async_register_ws(hass):
             if not storage:
                 conn.send_result(
                     msg["id"],
-                    {"users": [], "sources": {}, "group_booleans": {}, "groups": []},
+                    {
+                        "users": [],
+                        "groups": [],
+                        "access_log": [],
+                    },
                 )
                 return
 
             st = _ensure_base_state(storage.state)
             _sync_groups_from_users(st)
 
+            # access_log kann groß sein -> trotzdem ok, aber wir begrenzen sicherheitshalber
+            # (UI macht eh Filter). Wenn du mehr willst: Zahl erhöhen.
+            access_log = st.get("access_log") or []
+            if isinstance(access_log, list) and len(access_log) > 2000:
+                access_log = access_log[-2000:]
+
             conn.send_result(
                 msg["id"],
                 {
                     "users": st.get("users", []),
-                    "sources": st.get("sources", {}),
-                    "group_booleans": st.get("group_booleans", {}),
                     "groups": st.get("groups", []),
+                    "access_log": access_log,
                 },
             )
         except Exception as e:
@@ -139,18 +148,19 @@ def async_register_ws(hass):
             u["name"] = msg["name"].strip() or u.get("name") or "Ohne Name"
             u["enabled"] = bool(msg["enabled"])
 
-            groups = [_norm_group(x) for x in _split_csv(msg.get("groups_csv", ""))]
-            groups = [g for g in groups if g]
+            groups_raw = _split_csv(msg.get("groups_csv", ""))
+            groups = []
+            seen = set()
+            for x in groups_raw:
+                gg = _norm_group(x)
+                if gg and gg not in seen:
+                    seen.add(gg)
+                    groups.append(gg)
             u["groups"] = groups
 
-            rfids = _split_csv(msg.get("rfids_csv", ""))
-            u["rfids"] = rfids
+            u["rfids"] = _split_csv(msg.get("rfids_csv", ""))
 
-            # PIN handling:
-            # "__KEEP__" = nichts ändern
-            # "clear"    = alle PINs löschen
             pins_csv = (msg.get("pins_csv") or "").strip()
-
             if pins_csv and pins_csv != "__KEEP__":
                 if pins_csv.lower() == "clear":
                     u["pin_hashes"] = []
@@ -160,7 +170,6 @@ def async_register_ws(hass):
                     u["salt"] = salt
                     u["pin_hashes"] = [_hash_pin(salt, p) for p in pins]
 
-            # Gruppenliste automatisch pflegen (damit neue Gruppen sofort erscheinen)
             _sync_groups_from_users(st)
 
             await storage.async_save()
@@ -192,46 +201,6 @@ def async_register_ws(hass):
         except Exception as e:
             conn.send_error(msg["id"], "delete_user_failed", str(e))
 
-    @websocket_api.websocket_command(
-        {
-            "type": "zutritt_manager/set_config",
-            "sources": dict,
-            "group_booleans": dict,
-        }
-    )
-    @websocket_api.async_response
-    async def ws_set_config(hass, conn, msg):
-        try:
-            storage = _get_storage(hass)
-            if not storage:
-                conn.send_error(msg["id"], "not_ready", "storage not initialized")
-                return
-
-            st = _ensure_base_state(storage.state)
-            st["sources"] = msg.get("sources") or {}
-            st["group_booleans"] = msg.get("group_booleans") or {}
-
-            await storage.async_save()
-            conn.send_result(msg["id"], True)
-        except Exception as e:
-            conn.send_error(msg["id"], "set_config_failed", str(e))
-
-    # ✅ Gruppenverwaltung (genau was du willst)
-    @websocket_api.websocket_command({"type": "zutritt_manager/get_groups"})
-    @websocket_api.async_response
-    async def ws_get_groups(hass, conn, msg):
-        try:
-            storage = _get_storage(hass)
-            if not storage:
-                conn.send_result(msg["id"], {"groups": []})
-                return
-
-            st = _ensure_base_state(storage.state)
-            _sync_groups_from_users(st)
-            conn.send_result(msg["id"], {"groups": st.get("groups", [])})
-        except Exception as e:
-            conn.send_error(msg["id"], "get_groups_failed", str(e))
-
     @websocket_api.websocket_command({"type": "zutritt_manager/add_group", "group": str})
     @websocket_api.async_response
     async def ws_add_group(hass, conn, msg):
@@ -248,8 +217,10 @@ def async_register_ws(hass):
                 return
 
             groups = st.setdefault("groups", [])
-            if g not in groups:
+            normed = set(_norm_group(x) for x in groups)
+            if g not in normed:
                 groups.append(g)
+            groups[:] = sorted(set(_norm_group(x) for x in groups if _norm_group(x)))
 
             await storage.async_save()
             conn.send_result(msg["id"], True)
@@ -271,14 +242,10 @@ def async_register_ws(hass):
                 conn.send_error(msg["id"], "invalid_group", "empty group")
                 return
 
-            # aus Gruppenliste entfernen
-            groups = st.setdefault("groups", [])
-            groups[:] = [x for x in groups if _norm_group(x) != g]
+            st["groups"] = [x for x in st.get("groups", []) if _norm_group(x) != g]
 
-            # ✅ bei allen Usern entfernen
             for u in st.get("users", []):
-                ug = u.get("groups", []) or []
-                u["groups"] = [x for x in ug if _norm_group(x) != g]
+                u["groups"] = [x for x in (u.get("groups") or []) if _norm_group(x) != g]
 
             await storage.async_save()
             conn.send_result(msg["id"], True)
@@ -289,7 +256,5 @@ def async_register_ws(hass):
     websocket_api.async_register_command(hass, ws_add_user)
     websocket_api.async_register_command(hass, ws_update_user)
     websocket_api.async_register_command(hass, ws_delete_user)
-    websocket_api.async_register_command(hass, ws_set_config)
-    websocket_api.async_register_command(hass, ws_get_groups)
     websocket_api.async_register_command(hass, ws_add_group)
     websocket_api.async_register_command(hass, ws_delete_group)
