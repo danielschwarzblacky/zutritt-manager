@@ -20,7 +20,7 @@ LEGACY_KEYS = [
     f"{DOMAIN}.data",
 ]
 
-LOG_RETENTION_DAYS = 21
+LOG_RETENTION_DAYS = 30
 LOG_FILE = "/config/www/zutritt_manager_access.log"
 
 
