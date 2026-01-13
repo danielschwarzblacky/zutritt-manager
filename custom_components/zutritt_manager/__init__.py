@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import timedelta
+from pathlib import Path
+import shutil
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.config_entries import ConfigEntry
@@ -17,13 +19,21 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["switch"]
 
+# Sidebar Panel
 PANEL_URL = "zutritt"
 PANEL_TITLE = "Zutritt"
 PANEL_ICON = "mdi:shield-key"
-PANEL_MODULE_URL = "/local/zutritt-panel.js"  # /config/www/zutritt-panel.js
 PANEL_ELEMENT = "zutritt-manager-panel"
 
+# Diese Dateien werden nach /config/www kopiert => /local/...
+PANEL_ASSETS = [
+    "zutritt-panel.js",
+    "zutritt.html",
+]
 
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
@@ -42,14 +52,70 @@ def _normalize_groups(groups) -> list[str]:
     return out
 
 
+def _ensure_dir(p: Path) -> None:
+    p.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_if_missing_or_newer(src: Path, dst: Path) -> bool:
+    """
+    Kopiert src -> dst wenn dst fehlt oder src neuer ist.
+    Rückgabe True, wenn kopiert wurde.
+    """
+    if not src.exists():
+        return False
+
+    if not dst.exists():
+        shutil.copy2(src, dst)
+        return True
+
+    try:
+        if src.stat().st_mtime > dst.stat().st_mtime:
+            shutil.copy2(src, dst)
+            return True
+    except Exception:
+        # notfalls überschreiben
+        shutil.copy2(src, dst)
+        return True
+
+    return False
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    # -----------------------------
+    # Storage + WS
+    # -----------------------------
     storage = ZutrittStorage(hass)
     await storage.async_load()
     hass.data.setdefault(DOMAIN, {})["storage"] = storage
 
     async_register_ws(hass)
 
+    # -----------------------------
+    # AUTO-INSTALL der UI Assets nach /config/www
+    # => erreichbar als /local/...
+    # -----------------------------
+    src_dir = Path(__file__).parent / "panels"
+    dst_dir = Path(hass.config.path("www"))
+    _ensure_dir(dst_dir)
+
+    copied_any = False
+    for fn in PANEL_ASSETS:
+        src = src_dir / fn
+        dst = dst_dir / fn
+        if _copy_if_missing_or_newer(src, dst):
+            copied_any = True
+            _LOGGER.info("Zutritt UI Asset kopiert: %s -> %s", src, dst)
+
+    if not (dst_dir / "zutritt-panel.js").exists():
+        _LOGGER.error(
+            "zutritt-panel.js fehlt in /config/www. "
+            "Prüfe ob custom_components/zutritt_manager/panels/zutritt-panel.js existiert."
+        )
+
+    # -----------------------------
     # Sidebar Panel (Admin only)
+    # Lädt JS aus /local/zutritt-panel.js
+    # -----------------------------
     async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -58,13 +124,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         frontend_url_path=PANEL_URL,
         config={
             "name": "zutritt_manager_panel",
-            "module_url": PANEL_MODULE_URL,
+            "module_url": "/local/zutritt-panel.js",
             "element": PANEL_ELEMENT,
         },
         require_admin=True,
     )
-    _LOGGER.info("Zutritt Panel registriert: /%s (Admin only)", PANEL_URL)
 
+    if copied_any:
+        _LOGGER.warning(
+            "Zutritt UI wurde aktualisiert. Wenn die Seite leer bleibt: Browser Cache hart neu laden (Strg+F5)."
+        )
+
+    # -----------------------------
+    # Deine bestehende Logik (Events -> prüfen -> loggen -> pulse)
+    # -----------------------------
     async def _pulse_input_boolean(entity_id: str, seconds: float = 0.35) -> None:
         await hass.services.async_call(
             "input_boolean", "turn_on", {"entity_id": entity_id}, blocking=False
@@ -131,10 +204,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             "groups": groups,
         }
 
+        # Zentrales Event (Automationen/GUI)
         hass.bus.async_fire("zutritt_manager.access", event_data)
 
+        # Backend Log (immer)
         await storage.async_append_log(event_data)
 
+        # Feedback Helper (wenn vorhanden)
         if granted:
             await _pulse_input_boolean("input_boolean.halle_keypad_granted")
             await _pulse_group_switches(groups)
