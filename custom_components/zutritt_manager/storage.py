@@ -101,6 +101,47 @@ class ZutrittStorage:
     def get_state(self) -> dict[str, Any]:
         return self.state
 
+    def get_groups(self) -> list[str]:
+        """Return normalized group ids.
+
+        Uses state['groups'] when present (UI-managed) and also derives from user entries.
+        Normalization makes ids entity_id-safe: lowercase, spaces -> underscore, strip punctuation.
+        Falls back to the legacy default groups if nothing is defined.
+        """
+        st = self.state or {}
+
+        def _slug(g: str) -> str:
+            g = (g or "").strip().lower()
+            g = " ".join(g.split())
+            g = g.replace(",", "")
+            g = g.replace(" ", "_")
+            g = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in g)
+            while "__" in g:
+                g = g.replace("__", "_")
+            return g.strip("_")
+
+        out: list[str] = []
+
+        raw_groups = st.get("groups", [])
+        if isinstance(raw_groups, list):
+            for g in raw_groups:
+                sg = _slug(str(g))
+                if sg:
+                    out.append(sg)
+
+        users = st.get("users", [])
+        if isinstance(users, list):
+            for u in users:
+                for g in (u.get("groups") or []):
+                    sg = _slug(str(g))
+                    if sg:
+                        out.append(sg)
+
+        if not out:
+            out = ["chef", "lieferant", "mitarbeiter"]
+
+        return sorted(set(out))
+
     def get_log(self) -> list[dict[str, Any]]:
         lg = self.state.get("log", [])
         return lg if isinstance(lg, list) else []
