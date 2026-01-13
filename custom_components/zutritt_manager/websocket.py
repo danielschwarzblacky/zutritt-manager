@@ -4,8 +4,9 @@ import hashlib
 import secrets
 
 from homeassistant.components import websocket_api
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN
+from .const import DOMAIN, SIGNAL_GROUPS_UPDATED
 
 
 def _split_csv(s: str) -> list[str]:
@@ -15,11 +16,17 @@ def _split_csv(s: str) -> list[str]:
 
 
 def _norm_group(g: str) -> str:
-    # Case-insensitive: canonical lowercase
+    # canonical group id (entity_id safe)
     g = (g or "").strip()
     g = " ".join(g.split())
     g = g.replace(",", "")
-    return g.lower()
+    g = g.lower()
+    # make entity_id safe
+    g = g.replace(" ", "_")
+    g = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in g)
+    while "__" in g:
+        g = g.replace("__", "_")
+    return g.strip("_")
 
 
 def _hash_pin(salt: str, pin: str) -> str:
@@ -82,6 +89,8 @@ def async_register_ws(hass):
                 msg["id"],
                 {
                     "users": st.get("users", []),
+                    "sources": st.get("sources", {}),
+                    "group_booleans": st.get("group_booleans", {}),
                     "groups": st.get("groups", []),
                     "access_log": access_log,
                 },
@@ -113,6 +122,7 @@ def async_register_ws(hass):
             users.append(user)
 
             await storage.async_save()
+            async_dispatcher_send(hass, SIGNAL_GROUPS_UPDATED)
             conn.send_result(msg["id"], True)
         except Exception as e:
             conn.send_error(msg["id"], "add_user_failed", str(e))
@@ -173,6 +183,7 @@ def async_register_ws(hass):
             _sync_groups_from_users(st)
 
             await storage.async_save()
+            async_dispatcher_send(hass, SIGNAL_GROUPS_UPDATED)
             conn.send_result(msg["id"], True)
         except Exception as e:
             conn.send_error(msg["id"], "update_user_failed", str(e))
@@ -197,6 +208,7 @@ def async_register_ws(hass):
                 return
 
             await storage.async_save()
+            async_dispatcher_send(hass, SIGNAL_GROUPS_UPDATED)
             conn.send_result(msg["id"], True)
         except Exception as e:
             conn.send_error(msg["id"], "delete_user_failed", str(e))
@@ -223,6 +235,7 @@ def async_register_ws(hass):
             groups[:] = sorted(set(_norm_group(x) for x in groups if _norm_group(x)))
 
             await storage.async_save()
+            async_dispatcher_send(hass, SIGNAL_GROUPS_UPDATED)
             conn.send_result(msg["id"], True)
         except Exception as e:
             conn.send_error(msg["id"], "add_group_failed", str(e))
@@ -248,6 +261,7 @@ def async_register_ws(hass):
                 u["groups"] = [x for x in (u.get("groups") or []) if _norm_group(x) != g]
 
             await storage.async_save()
+            async_dispatcher_send(hass, SIGNAL_GROUPS_UPDATED)
             conn.send_result(msg["id"], True)
         except Exception as e:
             conn.send_error(msg["id"], "delete_group_failed", str(e))
