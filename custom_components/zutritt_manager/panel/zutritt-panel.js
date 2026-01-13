@@ -1,7 +1,29 @@
-class ZutrittPanel extends HTMLElement {
+// /config/www/zutritt-panel.js
+class ZutrittManagerPanel extends HTMLElement {
   set hass(hass) {
-    this.innerHTML = "<h1>Zutritt Manager</h1><p>Panel geladen</p>";
+    // hass wird von Home Assistant gesetzt
+  }
+
+  connectedCallback() {
+    this.style.height = "100%";
+    this.style.width = "100%";
+    this.style.display = "block";
+
+    // iframe einmal erstellen
+    if (this._iframe) return;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.border = "0";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    iframe.style.display = "block";
+
+    // Das ist deine HTML im www-Ordner
+    iframe.src = "/local/zutritt.html";
+
+    this._iframe = iframe;
+    this.appendChild(iframe);
   }
 }
-customElements.define("zutritt-panel", ZutrittPanel);
-document.body.appendChild(document.createElement("zutritt-panel"));
+
+customElements.define("zutritt-manager-panel", ZutrittManagerPanel);
