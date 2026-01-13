@@ -9,7 +9,6 @@ import shutil
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.event import async_call_later
-from homeassistant.components.frontend import async_register_built_in_panel
 
 from .const import DOMAIN
 from .storage import ZutrittStorage
