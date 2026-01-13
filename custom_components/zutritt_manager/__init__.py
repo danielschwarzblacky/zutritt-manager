@@ -42,12 +42,25 @@ def _hash_pin(salt: str, pin: str) -> str:
 
 
 def _normalize_groups(groups) -> list[str]:
+    """Normalize groups to entity-id-safe slugs."""
     if not groups:
         return []
-    out = []
+    out: list[str] = []
     for g in groups:
-        if isinstance(g, str) and g.strip():
-            out.append(g.strip().lower())
+        if not isinstance(g, str):
+            continue
+        s = g.strip().lower()
+        if not s:
+            continue
+        s = " ".join(s.split())
+        s = s.replace(",", "")
+        s = s.replace(" ", "_")
+        s = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in s)
+        while "__" in s:
+            s = s.replace("__", "_")
+        s = s.strip("_")
+        if s:
+            out.append(s)
     return out
 
 
@@ -218,33 +231,4 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.bus.async_listen("esphome.zutritt_input", _on_esphome_input)
 
-    async def _on_access(ev: Event) -> None:
-        d = ev.data or {}
-        result = _norm(d.get("result") or "")
-        groups = _normalize_groups(d.get("groups") or [])
-
-        await storage.async_append_log(
-            {
-                "source": d.get("source", "unknown"),
-                "type": d.get("type", "unknown"),
-                "result": d.get("result", "unknown"),
-                "user": d.get("user", "-"),
-                "groups": groups,
-            }
-        )
-
-        if result == "granted":
-            await _pulse_group_switches(groups)
-
-    hass.bus.async_listen("zutritt_manager.access", _on_access)
-
     return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    return True
-
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
