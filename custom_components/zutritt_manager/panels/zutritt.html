@@ -68,6 +68,23 @@
     .table td{padding:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04)}
     .table td:first-child{border-top-left-radius:12px;border-bottom-left-radius:12px}
     .table td:last-child{border-top-right-radius:12px;border-bottom-right-radius:12px}
+
+    /* NEW: Dropdown für Token */
+    details.dd { display:inline-block; }
+    details.dd > summary{
+      list-style:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    details.dd > summary::-webkit-details-marker{display:none}
+    .ddbox{
+      margin-top:10px;
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background:rgba(255,255,255,.05);
+    }
   </style>
 </head>
 
@@ -80,25 +97,35 @@
       <span class="pill">30 Tage Log: <span id="logCount" class="small">0</span></span>
     </div>
 
+    <!-- Top actions bleiben, Token jetzt Dropdown -->
     <div class="banner">
       <div class="row wrap">
-        <b>Token</b>
+        <b>Steuerung</b>
         <span class="small">WebSocket startet erst mit gültigem Token (Ban-Schutz).</span>
         <div class="spacer"></div>
+
         <button class="btn" id="btnAutoToken">Auto</button>
+
+        <!-- Token Dropdown -->
+        <details class="dd" id="tokenDrop">
+          <summary class="btn" id="btnTokenDrop">
+            Token ▾ <span class="small" id="tokenState">Auto: nicht geprüft</span>
+          </summary>
+          <div class="ddbox">
+            <label style="margin-top:0">Long-Lived Access Token (optional)</label>
+            <input type="text" id="manualToken" placeholder="LLAT hier einfügen (Profil → Long-Lived Access Tokens)" />
+            <div class="row wrap" style="margin-top:10px">
+              <button class="btn" id="btnSaveToken">Token speichern</button>
+              <button class="btn danger" id="btnClearToken">Token löschen</button>
+              <div class="spacer"></div>
+            </div>
+            <div class="hint">Empfehlung: Auto nutzen. Wenn das nicht geht: LLAT speichern (wird auf dem Gerät behalten).</div>
+          </div>
+        </details>
+
         <button class="btn primary" id="btnConnect">Verbinden</button>
         <button class="btn danger" id="btnDisconnect">Trennen</button>
       </div>
-
-      <label style="margin-top:10px">Long-Lived Access Token (optional)</label>
-      <input type="text" id="manualToken" placeholder="LLAT hier einfügen (Profil → Long-Lived Access Tokens)" />
-      <div class="row wrap" style="margin-top:10px">
-        <button class="btn" id="btnSaveToken">Token speichern</button>
-        <button class="btn danger" id="btnClearToken">Token löschen</button>
-        <div class="spacer"></div>
-        <span class="small" id="tokenState">Auto: nicht geprüft</span>
-      </div>
-      <div class="hint">Empfehlung: Auto nutzen. Wenn das nicht geht: LLAT speichern.</div>
     </div>
   </div>
 
@@ -193,7 +220,7 @@
         <!-- LOG -->
         <div id="tab-log" style="display:none">
           <div class="row wrap">
-            <div class="hint">Log aus deiner 30-Tage Datei (beim Verbinden eingelesen).</div>
+            <div class="hint">Log kommt aus: <span class="mono">/local/zutritt_manager_access.log</span> (www-Ordner)</div>
             <div class="spacer"></div>
             <button class="btn" id="btnLogRefresh">↻ Aktualisieren</button>
           </div>
@@ -207,7 +234,7 @@
 
         <!-- STATS -->
         <div id="tab-stats" style="display:none">
-          <div class="hint">Statistik aus dem 30-Tage Log. (Neueste Daten = genauer)</div>
+          <div class="hint">Statistik aus dem 30-Tage Logfile (www). (Neueste Daten = genauer)</div>
 
           <div class="kpi" style="margin-top:10px">
             <div class="kpic"><div class="n" id="kAll">0</div><div class="l">30 Tage – Gesamt</div></div>
@@ -259,6 +286,7 @@
     wsId: 1,
     pending: new Map(),
     connected: false,
+    logUrl: "/local/zutritt_manager_access.log",
   };
 
   $("haBase").textContent = state.haBase;
@@ -301,6 +329,9 @@
     return t && t.trim() ? t.trim() : null;
   }
   function getBestToken(){ return getAutoToken() || getManualToken(); }
+
+  // manual token input initial befüllen (damit Dropdown gleich stimmt)
+  try { $("manualToken").value = getManualToken() || ""; } catch(e){}
 
   function call(type, extra = {}){
     if (!state.ws || state.ws.readyState !== 1) {
@@ -500,20 +531,16 @@
   }
 
   function parseEventTime(ev){
-    // Unterstützt viele Formate: epoch ms/sec, ISO, "12.1.2026, 04:41:24", etc.
     const v = ev?.ts ?? ev?.time ?? ev?.dt ?? ev?.date ?? ev?.timestamp ?? null;
     if (v === null || v === undefined) return null;
 
     if (typeof v === "number"){
-      // seconds vs ms
       return new Date(v < 10_000_000_000 ? v * 1000 : v);
     }
     if (typeof v === "string"){
-      // Versuch 1: ISO
       const d1 = new Date(v);
       if (!isNaN(d1.getTime())) return d1;
 
-      // Versuch 2: "12.1.2026, 04:41:24"
       const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})$/);
       if (m){
         const dd = parseInt(m[1],10);
@@ -537,7 +564,6 @@
     box.innerHTML = "";
 
     const entries = (state.access_log || []).slice();
-    // neueste oben
     entries.sort((a,b)=>{
       const da = parseEventTime(a)?.getTime() ?? 0;
       const db = parseEventTime(b)?.getTime() ?? 0;
@@ -593,7 +619,7 @@
 
     const perUser = new Map();
     const perGroup = new Map();
-    const perSource = new Map(); // source -> {g,d,t}
+    const perSource = new Map();
 
     for (const ev of entries){
       const dt = parseEventTime(ev);
@@ -628,7 +654,6 @@
     $("kDenied").textContent = String(denied);
     $("kToday").textContent = String(today);
 
-    // Top user / top groups
     const topUser = topN(perUser, 5);
     const topGroup = topN(perGroup, 5);
 
@@ -651,7 +676,6 @@
       tbody.appendChild(tr);
     }
 
-    // Sources
     const sbody = $("statsSources");
     sbody.innerHTML = "";
     const srcSorted = Array.from(perSource.entries()).sort((a,b)=>b[1].total-a[1].total);
@@ -668,18 +692,47 @@
     setStatsStatus(`Berechnet aus ${all} Events (letzte 30 Tage)`);
   }
 
+  // NEW: Log aus Datei laden (www -> /local)
+  async function loadLogFromFile(){
+    try{
+      setLogStatus("Lade Logfile…");
+      // Cache umgehen
+      const url = state.logUrl + "?t=" + Date.now();
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const txt = await r.text();
+      const lines = txt.split("\n").map(x=>x.trim()).filter(Boolean);
+
+      const parsed = [];
+      for (const line of lines){
+        try { parsed.push(JSON.parse(line)); } catch(e){ /* ignore */ }
+      }
+      state.access_log = parsed;
+      $("logCount").textContent = String(parsed.length);
+      setLogStatus(`Log geladen (${parsed.length})`);
+      return true;
+    } catch(e){
+      state.access_log = [];
+      $("logCount").textContent = "0";
+      setLogStatus("Logfile Fehler: " + e.message);
+      return false;
+    }
+  }
+
   async function loadAll(){
+    // Users/Groups kommen weiterhin via WS aus deiner Integration
     if (!state.connected) return;
     try{
       setStatus("Lade…");
       setGroupsStatus("Lade…");
-      setLogStatus("Lade…");
       setStatsStatus("Lade…");
 
       const st = await call("zutritt_manager/get_state");
       state.users = Array.isArray(st.users) ? st.users : [];
       state.groups = Array.isArray(st.groups) ? st.groups : [];
-      state.access_log = Array.isArray(st.access_log) ? st.access_log : [];
+
+      // Log kommt aus Datei (nicht aus WS)
+      await loadLogFromFile();
 
       if (!state.selectedId && state.users.length) state.selectedId = state.users[0].id;
       if (state.selectedId && !state.users.some(u => u.id === state.selectedId)) state.selectedId = state.users[0]?.id || null;
@@ -859,20 +912,24 @@
   $("newGroup").addEventListener("keydown", (e) => { if (e.key === "Enter") addGroup(); });
   $("search").addEventListener("input", () => renderList());
 
-  $("btnLogRefresh").addEventListener("click", () => loadAll());
+  $("btnLogRefresh").addEventListener("click", async () => { await loadLogFromFile(); renderLog(); renderStats(); });
   $("btnLogTop").addEventListener("click", () => renderLog());
-  $("btnStatsRecalc").addEventListener("click", () => renderStats());
+  $("btnStatsRecalc").addEventListener("click", async () => { await loadLogFromFile(); renderStats(); });
 
   $("btnAutoToken").addEventListener("click", () => {
     const t = getAutoToken();
     setTokenState(t ? "Auto-Token gefunden" : "Auto-Token nicht vorhanden");
   });
+
   $("btnSaveToken").addEventListener("click", () => {
     const t = $("manualToken").value.trim();
     if (!t) { setTokenState("Nichts eingegeben"); return; }
     localStorage.setItem("zutritt_manager_llat", t);
     setTokenState("Manueller Token gespeichert");
+    // Dropdown schließen optional:
+    // $("tokenDrop").open = false;
   });
+
   $("btnClearToken").addEventListener("click", () => {
     localStorage.removeItem("zutritt_manager_llat");
     $("manualToken").value = "";

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -20,7 +21,7 @@ LEGACY_KEYS = [
 ]
 
 LOG_RETENTION_DAYS = 21
-LOG_FILE = "/config/zutritt_manager_access.log"
+LOG_FILE = "/config/www/zutritt_manager_access.log"
 
 
 def _utc_now() -> datetime:
@@ -28,7 +29,12 @@ def _utc_now() -> datetime:
 
 
 def _default_state() -> dict[str, Any]:
-    return {"users": [], "sources": {}, "group_booleans": {}, "log": []}
+    return {
+        "users": [],
+        "sources": {},
+        "group_booleans": {},
+        "log": [],
+    }
 
 
 class ZutrittStorage:
@@ -37,8 +43,14 @@ class ZutrittStorage:
         self.store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.state: dict[str, Any] = _default_state()
 
+        # Dedup: doppelte identische Events im kurzen Zeitfenster ignorieren
+        self._dedup_window_s = 0.8
+        self._dedup_last_sig: str | None = None
+        self._dedup_last_ts: float = 0.0
+
     async def async_load(self) -> None:
         data = await self.store.async_load()
+
         if isinstance(data, dict):
             st = _default_state()
             st.update(data)
@@ -60,19 +72,27 @@ class ZutrittStorage:
         for key in LEGACY_KEYS:
             if key == STORAGE_KEY:
                 continue
+
             legacy = Store(self.hass, STORAGE_VERSION, key)
             data = await legacy.async_load()
             if not isinstance(data, dict):
                 continue
+
             users = data.get("users")
             if isinstance(users, list) and users:
                 self.state["users"] = users
-                if isinstance(data.get("sources"), dict):
-                    self.state["sources"] = data["sources"]
-                if isinstance(data.get("group_booleans"), dict):
-                    self.state["group_booleans"] = data["group_booleans"]
-                # Log migrieren wir bewusst NICHT
-                return True
+
+            sources = data.get("sources")
+            if isinstance(sources, dict):
+                self.state["sources"] = sources
+
+            group_booleans = data.get("group_booleans")
+            if isinstance(group_booleans, dict):
+                self.state["group_booleans"] = group_booleans
+
+            # Log migrieren wir bewusst NICHT (sonst doppelt + unnötig groß)
+            return True
+
         return False
 
     async def async_save(self) -> None:
@@ -91,20 +111,36 @@ class ZutrittStorage:
 
     async def async_prune_logs(self) -> None:
         cutoff = _utc_now() - timedelta(days=LOG_RETENTION_DAYS)
-        new_log = []
+        new_log: list[dict[str, Any]] = []
+
         for e in self.get_log():
             try:
                 t = datetime.fromisoformat(e.get("time"))
                 if t >= cutoff:
                     new_log.append(e)
             except Exception:
+                # kaputte Zeilen ignorieren
                 pass
+
         self.state["log"] = new_log
         await self.async_save()
 
     async def async_append_log(self, entry: dict[str, Any]) -> None:
+        # Zeit setzen (ISO8601)
         entry["time"] = _utc_now().isoformat()
 
+        # ✅ Dedup MUSS VOR dem Einfügen passieren
+        now = time.monotonic()
+        sig_obj = {k: entry.get(k) for k in entry.keys() if k != "time"}
+        sig = json.dumps(sig_obj, sort_keys=True, ensure_ascii=False, default=str)
+
+        if self._dedup_last_sig == sig and (now - self._dedup_last_ts) <= self._dedup_window_s:
+            return
+
+        self._dedup_last_sig = sig
+        self._dedup_last_ts = now
+
+        # RAM-Log
         lg = self.state.setdefault("log", [])
         if not isinstance(lg, list):
             lg = []
@@ -112,13 +148,16 @@ class ZutrittStorage:
 
         lg.insert(0, entry)
 
+        # Retention
         await self.async_prune_logs()
 
+        # Datei schreiben (blocking -> executor)
         await self.hass.async_add_executor_job(self._append_file, entry)
 
     def _append_file(self, entry: dict[str, Any]) -> None:
         try:
             with open(LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         except Exception:
+            # keine Exceptions nach oben werfen (sonst nervt es die Integration)
             pass
