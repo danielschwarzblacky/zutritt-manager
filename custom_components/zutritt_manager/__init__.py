@@ -6,7 +6,6 @@ import shutil
 from datetime import timedelta
 from pathlib import Path
 
-from homeassistant.components.frontend import async_register_built_in_panel
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
