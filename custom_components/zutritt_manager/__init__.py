@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.event import async_call_later
+from homeassistant.components.frontend import async_register_built_in_panel
 
 from .const import DOMAIN
 from .storage import ZutrittStorage
 from .websocket import async_register_ws
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = ["switch"]
+
+PANEL_URL = "zutritt"
+PANEL_TITLE = "Zutritt"
+PANEL_ICON = "mdi:shield-key"
+PANEL_MODULE_URL = "/local/zutritt-panel.js"  # /config/www/zutritt-panel.js
+PANEL_ELEMENT = "zutritt-manager-panel"
 
 
 def _norm(s: str) -> str:
@@ -39,13 +49,27 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async_register_ws(hass)
 
+    # Sidebar Panel (Admin only)
+    async_register_built_in_panel(
+        hass,
+        component_name="custom",
+        sidebar_title=PANEL_TITLE,
+        sidebar_icon=PANEL_ICON,
+        frontend_url_path=PANEL_URL,
+        config={
+            "name": "zutritt_manager_panel",
+            "module_url": PANEL_MODULE_URL,
+            "element": PANEL_ELEMENT,
+        },
+        require_admin=True,
+    )
+    _LOGGER.info("Zutritt Panel registriert: /%s (Admin only)", PANEL_URL)
+
     async def _pulse_input_boolean(entity_id: str, seconds: float = 0.35) -> None:
-        # ON
         await hass.services.async_call(
             "input_boolean", "turn_on", {"entity_id": entity_id}, blocking=False
         )
 
-        # OFF später
         @callback
         def _off(_):
             hass.async_create_task(
@@ -57,19 +81,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         async_call_later(hass, timedelta(seconds=seconds), _off)
 
     async def _pulse_group_switches(groups: list[str]) -> None:
-        # Wichtig: NICHT über Entity-Objekte, sondern über Service auf Entity-ID
         for g in _normalize_groups(groups):
             entity_id = f"switch.zutritt_gruppe_{g}"
             await hass.services.async_call(
                 "switch", "turn_on", {"entity_id": entity_id}, blocking=False
             )
-            # unsere SwitchEntity setzt sich selbst wieder aus (Impuls)
-            # falls du doch OFF erzwingen willst, hier optional:
-            # async_call_later(... switch.turn_off ...)
 
-    # ------------------------------------------------------------
-    # 24/7: ESPHome sendet Rohdaten -> prüfen -> access event -> log + group pulse
-    # ------------------------------------------------------------
     async def _on_esphome_input(ev: Event) -> None:
         d = ev.data or {}
         source = (d.get("source") or "unknown").strip()
@@ -114,13 +131,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             "groups": groups,
         }
 
-        # Zentrales Event (Automationen/GUI)
         hass.bus.async_fire("zutritt_manager.access", event_data)
 
-        # Backend Log (immer, unabhängig von UI)
         await storage.async_append_log(event_data)
 
-        # Feedback an ESP (wenn du die helper hast)
         if granted:
             await _pulse_input_boolean("input_boolean.halle_keypad_granted")
             await _pulse_group_switches(groups)
@@ -129,16 +143,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.bus.async_listen("esphome.zutritt_input", _on_esphome_input)
 
-    # ------------------------------------------------------------
-    # 24/7: Wenn irgendwer direkt zutritt_manager.access feuert -> log + group pulse
-    # (damit deine manuellen Tests ohne Hardware auch Puls + Log erzeugen)
-    # ------------------------------------------------------------
     async def _on_access(ev: Event) -> None:
         d = ev.data or {}
         result = _norm(d.get("result") or "")
         groups = _normalize_groups(d.get("groups") or [])
 
-        # Backend Log (auch wenn das Event nicht von uns kommt)
         await storage.async_append_log(
             {
                 "source": d.get("source", "unknown"),
