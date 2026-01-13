@@ -24,3 +24,9 @@ DEFAULT_STATE = {
     },
     "users": []
 }
+
+# Dispatcher signal: groups list changed -> switch entities reload
+SIGNAL_GROUPS_UPDATED = "zutritt_manager_groups_updated"
+
+# default pulse length for group switches
+IMPULSE_SECONDS = 1
