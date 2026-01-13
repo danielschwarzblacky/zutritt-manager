@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Zutritt Manager</title>
+  <style>
+    :root{
+      --bg:#0f131a; --card:rgba(255,255,255,.06); --border:rgba(255,255,255,.10);
+      --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.70); --muted2:rgba(255,255,255,.55);
+      --danger:#b00020; --ok:#2e7d32; --btn:rgba(255,255,255,.10); --btn2:rgba(255,255,255,.14);
+      --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .topbar{position:sticky;top:0;z-index:5;padding:14px 16px;background:linear-gradient(to bottom,rgba(15,19,26,.96),rgba(15,19,26,.78));border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+    .topbar h1{margin:0;font-size:18px;font-weight:700}
+    .sub{margin-top:6px;font-size:12px;color:var(--muted2);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)} .dot.bad{background:var(--danger)}
+    .wrap{padding:16px}
+    .grid{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+    .card h2{margin:0 0 10px 0;font-size:14px;color:var(--muted);font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+    .row{display:flex;gap:10px;align-items:center}
+    .row.wrap{flex-wrap:wrap}
+    .spacer{flex:1}
+    .btn{border:1px solid var(--border);background:var(--btn);color:var(--text);padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:650;letter-spacing:.2px}
+    .btn:hover{background:var(--btn2)}
+    .btn.danger{background:rgba(176,0,32,.22);border-color:rgba(176,0,32,.40)}
+    .btn.primary{background:rgba(46,125,50,.22);border-color:rgba(46,125,50,.40)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);outline:none}
+    label{display:block;margin-top:10px;font-size:12px;color:var(--muted)}
+    .hint{margin-top:6px;font-size:12px;color:var(--muted2);line-height:1.35}
+    .list{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 320px);overflow:auto;padding-right:6px}
+    .item{padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);cursor:pointer;display:flex;align-items:center;gap:10px}
+    .item:hover{background:rgba(255,255,255,.06)}
+    .item.active{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.14)}
+    .item .name{font-weight:700}
+    .item .meta{font-size:12px;color:var(--muted2)}
+    .badge{font-size:11px;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);padding:3px 8px;border-radius:999px;white-space:nowrap}
+    .tabs{display:flex;gap:8px;margin:6px 0 12px 0;flex-wrap:wrap}
+    .tab{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--muted);cursor:pointer;font-weight:700;font-size:12px}
+    .tab.active{background:rgba(255,255,255,.12);color:var(--text)}
+    .small{font-size:12px;color:var(--muted2)}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:980px){.two{grid-template-columns:1fr}}
+    .banner{margin-top:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.05)}
+    .mono{font-family:var(--mono)}
+    .chk{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.03)}
+    .chk:hover{background:rgba(255,255,255,.05)}
+    .log{font-family:var(--mono);font-size:12px;white-space:pre-wrap;line-height:1.35;background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:12px;padding:10px;min-height:180px}
+    .logline{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.08)}
+    .logline:last-child{border-bottom:none}
+    .logtime{color:var(--muted2);min-width:160px}
+    .logok{color:rgba(46,125,50,.95)} .logbad{color:rgba(176,0,32,.95)}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    @media(max-width:980px){.kpi{grid-template-columns:repeat(2,1fr)}}
+    .kpic{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.04)}
+    .kpic .n{font-size:22px;font-weight:800}
+    .kpic .l{font-size:12px;color:var(--muted2);margin-top:4px}
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px;margin-top:10px}
+    .table th{font-size:12px;color:var(--muted);text-align:left;font-weight:800;padding:0 10px}
+    .table td{padding:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04)}
+    .table td:first-child{border-top-left-radius:12px;border-bottom-left-radius:12px}
+    .table td:last-child{border-top-right-radius:12px;border-bottom-right-radius:12px}
+
+    /* NEW: Dropdown für Token */
+    details.dd { display:inline-block; }
+    details.dd > summary{
+      list-style:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    details.dd > summary::-webkit-details-marker{display:none}
+    .ddbox{
+      margin-top:10px;
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background:rgba(255,255,255,.05);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <h1>Zutritt Manager</h1>
+    <div class="sub">
+      <span class="pill"><span id="wsDot" class="dot bad"></span> <span id="wsState">getrennt</span></span>
+      <span class="pill">Quelle: <span id="haBase"></span></span>
+      <span class="pill">30 Tage Log: <span id="logCount" class="small">0</span></span>
+    </div>
+
+    <!-- Top actions bleiben, Token jetzt Dropdown -->
+    <div class="banner">
+      <div class="row wrap">
+        <b>Steuerung</b>
+        <span class="small">WebSocket startet erst mit gültigem Token (Ban-Schutz).</span>
+        <div class="spacer"></div>
+
+        <button class="btn" id="btnAutoToken">Auto</button>
+
+        <!-- Token Dropdown -->
+        <details class="dd" id="tokenDrop">
+          <summary class="btn" id="btnTokenDrop">
+            Token ▾ <span class="small" id="tokenState">Auto: nicht geprüft</span>
+          </summary>
+          <div class="ddbox">
+            <label style="margin-top:0">Long-Lived Access Token (optional)</label>
+            <input type="text" id="manualToken" placeholder="LLAT hier einfügen (Profil → Long-Lived Access Tokens)" />
+            <div class="row wrap" style="margin-top:10px">
+              <button class="btn" id="btnSaveToken">Token speichern</button>
+              <button class="btn danger" id="btnClearToken">Token löschen</button>
+              <div class="spacer"></div>
+            </div>
+            <div class="hint">Empfehlung: Auto nutzen. Wenn das nicht geht: LLAT speichern (wird auf dem Gerät behalten).</div>
+          </div>
+        </details>
+
+        <button class="btn primary" id="btnConnect">Verbinden</button>
+        <button class="btn danger" id="btnDisconnect">Trennen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="card">
+        <h2>Benutzer</h2>
+        <div class="row wrap">
+          <button class="btn primary" id="btnAdd">+ Neu</button>
+          <button class="btn" id="btnReload">↻ Laden</button>
+          <div class="spacer"></div>
+        </div>
+
+        <label>Suchen</label>
+        <input type="text" id="search" placeholder="Daniel, Papa, …" />
+
+        <div class="list" id="userList"></div>
+        <div class="hint" id="leftHint"></div>
+      </div>
+
+      <div class="card">
+        <h2>Details</h2>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="user">Benutzer</button>
+          <button class="tab" data-tab="groups">Gruppen</button>
+          <button class="tab" data-tab="log">Log</button>
+          <button class="tab" data-tab="stats">Statistik</button>
+        </div>
+
+        <!-- USER -->
+        <div id="tab-user">
+          <div class="two">
+            <div>
+              <label>Name</label>
+              <input type="text" id="uName" placeholder="z.B. Daniel" />
+
+              <label>Aktiv</label>
+              <div class="row" style="margin-top:6px">
+                <input type="checkbox" id="uEnabled" />
+                <span class="small">Benutzer aktiv</span>
+              </div>
+
+              <label>Gruppen (Checkboxen)</label>
+              <div id="uGroupsBox" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+              <div class="hint">Gruppen legst du im Tab „Gruppen“ an/ab. Groß/Klein egal.</div>
+            </div>
+
+            <div>
+              <label>Neue PINs setzen (comma-separated)</label>
+              <input type="text" id="uPins" placeholder="1234,9999" />
+              <div class="hint">
+                PINs werden gehasht gespeichert. Alte PINs siehst du nicht. Wenn du hier etwas einträgst, ersetzt du die PIN-Liste.
+                Zum Löschen: <span class="mono">clear</span> eintragen.
+              </div>
+
+              <label>RFID UIDs (comma-separated)</label>
+              <input type="text" id="uRfids" placeholder="12345678,87654321" />
+            </div>
+          </div>
+
+          <div class="row wrap" style="margin-top:14px">
+            <button class="btn primary" id="btnSave">Speichern</button>
+            <button class="btn danger" id="btnDelete">Löschen</button>
+            <div class="spacer"></div>
+            <span class="small" id="status">Nicht verbunden</span>
+          </div>
+        </div>
+
+        <!-- GROUPS -->
+        <div id="tab-groups" style="display:none">
+          <div class="hint">
+            Gruppen sind reine Namen (z.B. <span class="mono">champions</span>, <span class="mono">chef</span>). Groß/Klein wird ignoriert.
+          </div>
+
+          <label>Neue Gruppe</label>
+          <div class="row wrap" style="margin-top:8px">
+            <input type="text" id="newGroup" placeholder="z.B. Champions" />
+            <button class="btn primary" id="btnAddGroup">Hinzufügen</button>
+          </div>
+
+          <label style="margin-top:12px">Vorhandene Gruppen</label>
+          <div id="groupsList" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+
+          <div class="row wrap" style="margin-top:14px">
+            <button class="btn" id="btnGroupsReload">↻ Neu laden</button>
+            <div class="spacer"></div>
+            <span class="small" id="groupsStatus">Nicht verbunden</span>
+          </div>
+        </div>
+
+        <!-- LOG -->
+        <div id="tab-log" style="display:none">
+          <div class="row wrap">
+            <div class="hint">Log kommt aus: <span class="mono">/local/zutritt_manager_access.log</span> (www-Ordner)</div>
+            <div class="spacer"></div>
+            <button class="btn" id="btnLogRefresh">↻ Aktualisieren</button>
+          </div>
+          <div class="log" id="logBox" style="margin-top:10px"></div>
+          <div class="row wrap" style="margin-top:14px">
+            <span class="small" id="logStatus">Nicht verbunden</span>
+            <div class="spacer"></div>
+            <button class="btn" id="btnLogTop">Top (neueste oben)</button>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div id="tab-stats" style="display:none">
+          <div class="hint">Statistik aus dem 30-Tage Logfile (www). (Neueste Daten = genauer)</div>
+
+          <div class="kpi" style="margin-top:10px">
+            <div class="kpic"><div class="n" id="kAll">0</div><div class="l">30 Tage – Gesamt</div></div>
+            <div class="kpic"><div class="n" id="kGranted">0</div><div class="l">30 Tage – Granted</div></div>
+            <div class="kpic"><div class="n" id="kDenied">0</div><div class="l">30 Tage – Denied</div></div>
+            <div class="kpic"><div class="n" id="kToday">0</div><div class="l">Heute – Gesamt</div></div>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Top User</th><th>Count</th><th>Top Gruppen</th><th>Count</th>
+              </tr>
+            </thead>
+            <tbody id="statsTop"></tbody>
+          </table>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Quelle</th><th>Granted</th><th>Denied</th><th>Gesamt</th>
+              </tr>
+            </thead>
+            <tbody id="statsSources"></tbody>
+          </table>
+
+          <div class="row wrap" style="margin-top:14px">
+            <button class="btn" id="btnStatsRecalc">↻ Neu berechnen</button>
+            <div class="spacer"></div>
+            <span class="small" id="statsStatus">Nicht verbunden</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const state = {
+    haBase: location.origin,
+    selectedId: null,
+    users: [],
+    groups: [],
+    access_log: [],
+    ws: null,
+    wsId: 1,
+    pending: new Map(),
+    connected: false,
+    logUrl: "/local/zutritt_manager_access.log",
+  };
+
+  $("haBase").textContent = state.haBase;
+
+  function setWsUI(ok, text){
+    $("wsDot").className = "dot " + (ok ? "ok" : "bad");
+    $("wsState").textContent = text;
+  }
+  function setStatus(t){ $("status").textContent = t; }
+  function setGroupsStatus(t){ $("groupsStatus").textContent = t; }
+  function setLogStatus(t){ $("logStatus").textContent = t; }
+  function setStatsStatus(t){ $("statsStatus").textContent = t; }
+  function setTokenState(t){ $("tokenState").textContent = t; }
+
+  function wsUrl(){
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    return `${proto}://${location.host}/api/websocket`;
+  }
+
+  function safeClose(){
+    try { if (state.ws) state.ws.close(); } catch(e){}
+    state.ws = null;
+    state.connected = false;
+    setWsUI(false, "getrennt");
+  }
+
+  function getTokens(){
+    try {
+      const raw = localStorage.getItem("hassTokens");
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(e){ return null; }
+  }
+  function getAutoToken(){
+    const t = getTokens();
+    return t && t.access_token ? t.access_token : null;
+  }
+  function getManualToken(){
+    const t = localStorage.getItem("zutritt_manager_llat");
+    return t && t.trim() ? t.trim() : null;
+  }
+  function getBestToken(){ return getAutoToken() || getManualToken(); }
+
+  // manual token input initial befüllen (damit Dropdown gleich stimmt)
+  try { $("manualToken").value = getManualToken() || ""; } catch(e){}
+
+  function call(type, extra = {}){
+    if (!state.ws || state.ws.readyState !== 1) {
+      return Promise.reject(new Error("Nicht verbunden"));
+    }
+    const id = state.wsId++;
+    const msg = { id, type, ...extra };
+    return new Promise((resolve, reject) => {
+      state.pending.set(id, { resolve, reject, type });
+      state.ws.send(JSON.stringify(msg));
+      setTimeout(() => {
+        if (state.pending.has(id)){
+          state.pending.delete(id);
+          reject(new Error("Timeout bei " + type));
+        }
+      }, 8000);
+    });
+  }
+
+  function setTab(which){
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === which));
+    $("tab-user").style.display = which === "user" ? "" : "none";
+    $("tab-groups").style.display = which === "groups" ? "" : "none";
+    $("tab-log").style.display = which === "log" ? "" : "none";
+    $("tab-stats").style.display = which === "stats" ? "" : "none";
+  }
+
+  function renderList(){
+    const q = $("search").value.trim().toLowerCase();
+    const list = $("userList");
+    list.innerHTML = "";
+
+    const filtered = state.users
+      .slice()
+      .sort((a,b) => (a.name||"").localeCompare(b.name||""))
+      .filter(u => !q || (u.name||"").toLowerCase().includes(q));
+
+    $("leftHint").textContent = filtered.length ? `${filtered.length} Benutzer` : "Keine Benutzer / Filter aktiv.";
+
+    for (const u of filtered){
+      const item = document.createElement("div");
+      item.className = "item" + (u.id === state.selectedId ? " active" : "");
+      item.addEventListener("click", () => {
+        state.selectedId = u.id;
+        renderList();
+        renderEditor();
+      });
+
+      const dot = document.createElement("span");
+      dot.className = "dot " + (u.enabled ? "ok" : "bad");
+      dot.style.flex = "0 0 auto";
+
+      const info = document.createElement("div");
+      info.style.display = "flex";
+      info.style.flexDirection = "column";
+      info.style.gap = "2px";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = u.name || "(ohne Name)";
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `Gruppen: ${(u.groups||[]).join(",") || "-"}`;
+
+      info.appendChild(name);
+      info.appendChild(meta);
+
+      const badges = document.createElement("div");
+      badges.style.marginLeft = "auto";
+      badges.style.display = "flex";
+      badges.style.gap = "6px";
+      badges.style.flexWrap = "wrap";
+
+      const b1 = document.createElement("span");
+      b1.className = "badge";
+      b1.textContent = `RFID: ${(u.rfids||[]).length}`;
+
+      const b2 = document.createElement("span");
+      b2.className = "badge";
+      b2.textContent = `PIN: ${(u.pin_hashes||[]).length}`;
+
+      badges.appendChild(b1);
+      badges.appendChild(b2);
+
+      item.appendChild(dot);
+      item.appendChild(info);
+      item.appendChild(badges);
+      list.appendChild(item);
+    }
+  }
+
+  function renderGroupsCheckboxes(selected){
+    const box = $("uGroupsBox");
+    box.innerHTML = "";
+
+    const selectedSet = new Set(selected || []);
+    const groups = (state.groups || []).slice().sort((a,b)=>a.localeCompare(b));
+
+    if (!groups.length){
+      const div = document.createElement("div");
+      div.className = "hint";
+      div.textContent = "Noch keine Gruppen angelegt.";
+      box.appendChild(div);
+      return;
+    }
+
+    for (const g of groups){
+      const row = document.createElement("label");
+      row.className = "chk";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.group = g;
+      cb.checked = selectedSet.has(g);
+
+      const span = document.createElement("span");
+      span.textContent = g;
+
+      row.appendChild(cb);
+      row.appendChild(span);
+      box.appendChild(row);
+    }
+  }
+
+  function getSelectedGroupsFromUI(){
+    const cbs = $("uGroupsBox").querySelectorAll("input[type=checkbox]");
+    const out = [];
+    cbs.forEach(cb => { if (cb.checked) out.push(cb.dataset.group); });
+    return out;
+  }
+
+  function renderEditor(){
+    const u = state.users.find(x => x.id === state.selectedId);
+
+    $("btnDelete").disabled = !u || !state.connected;
+    $("btnSave").disabled = !u || !state.connected;
+
+    if (!u){
+      $("uName").value = "";
+      $("uEnabled").checked = true;
+      $("uPins").value = "";
+      $("uRfids").value = "";
+      renderGroupsCheckboxes([]);
+      setStatus(state.connected ? "Kein Benutzer ausgewählt" : "Nicht verbunden");
+      return;
+    }
+
+    $("uName").value = u.name || "";
+    $("uEnabled").checked = !!u.enabled;
+    $("uPins").value = "";
+    $("uRfids").value = (u.rfids || []).join(",");
+    renderGroupsCheckboxes(u.groups || []);
+    setStatus("Bereit");
+  }
+
+  function renderGroupsList(){
+    const list = $("groupsList");
+    list.innerHTML = "";
+
+    const groups = (state.groups || []).slice().sort((a,b)=>a.localeCompare(b));
+    if (!groups.length){
+      const div = document.createElement("div");
+      div.className = "hint";
+      div.textContent = "Keine Gruppen vorhanden.";
+      list.appendChild(div);
+      return;
+    }
+
+    groups.forEach(g => {
+      const row = document.createElement("div");
+      row.className = "chk";
+
+      const left = document.createElement("span");
+      left.textContent = g;
+
+      const del = document.createElement("button");
+      del.className = "btn danger";
+      del.textContent = "Löschen";
+      del.style.marginLeft = "auto";
+      del.addEventListener("click", async () => {
+        if (!confirm(`Gruppe "${g}" löschen? Sie wird bei allen Usern entfernt.`)) return;
+        try{
+          setGroupsStatus("Lösche…");
+          await call("zutritt_manager/delete_group", { group: g });
+          await loadAll();
+          setGroupsStatus("Gelöscht");
+        } catch(e){
+          setGroupsStatus("Fehler: " + e.message);
+        }
+      });
+
+      row.appendChild(left);
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  function parseEventTime(ev){
+    const v = ev?.ts ?? ev?.time ?? ev?.dt ?? ev?.date ?? ev?.timestamp ?? null;
+    if (v === null || v === undefined) return null;
+
+    if (typeof v === "number"){
+      return new Date(v < 10_000_000_000 ? v * 1000 : v);
+    }
+    if (typeof v === "string"){
+      const d1 = new Date(v);
+      if (!isNaN(d1.getTime())) return d1;
+
+      const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (m){
+        const dd = parseInt(m[1],10);
+        const mm = parseInt(m[2],10)-1;
+        const yy = parseInt(m[3],10);
+        const HH = parseInt(m[4],10);
+        const MI = parseInt(m[5],10);
+        const SS = parseInt(m[6],10);
+        return new Date(yy, mm, dd, HH, MI, SS);
+      }
+    }
+    return null;
+  }
+
+  function fmtDate(d){
+    try { return d.toLocaleString("de-AT"); } catch(e){ return String(d); }
+  }
+
+  function renderLog(){
+    const box = $("logBox");
+    box.innerHTML = "";
+
+    const entries = (state.access_log || []).slice();
+    entries.sort((a,b)=>{
+      const da = parseEventTime(a)?.getTime() ?? 0;
+      const db = parseEventTime(b)?.getTime() ?? 0;
+      return db - da;
+    });
+
+    $("logCount").textContent = String(entries.length);
+
+    if (!entries.length){
+      box.textContent = "Kein Log vorhanden.";
+      return;
+    }
+
+    for (const ev of entries.slice(0, 300)){
+      const div = document.createElement("div");
+      div.className = "logline";
+
+      const dt = parseEventTime(ev);
+      const left = document.createElement("div");
+      left.className = "logtime";
+      left.textContent = dt ? fmtDate(dt) : "-";
+
+      const right = document.createElement("div");
+      const res = (ev?.result || "").toLowerCase();
+      right.className = (res === "granted") ? "logok" : "logbad";
+
+      const src = ev?.source || "?";
+      const typ = ev?.type || "?";
+      const result = ev?.result || "?";
+      const user = ev?.user || "-";
+      const groups = Array.isArray(ev?.groups) ? ev.groups : (ev?.groups ? [ev.groups] : []);
+      right.textContent = `${src} · ${typ} · ${result} | User: ${user} | Gruppen: ${JSON.stringify(groups)}`;
+
+      div.appendChild(left);
+      div.appendChild(right);
+      box.appendChild(div);
+    }
+
+    setLogStatus(`Angezeigt: ${Math.min(300, entries.length)} / ${entries.length}`);
+  }
+
+  function topN(map, n){
+    return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  }
+
+  function renderStats(){
+    const entries = (state.access_log || []).slice();
+    const now = new Date();
+    const start30 = new Date(now.getTime() - 30*24*60*60*1000);
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0);
+
+    let all=0, granted=0, denied=0, today=0;
+
+    const perUser = new Map();
+    const perGroup = new Map();
+    const perSource = new Map();
+
+    for (const ev of entries){
+      const dt = parseEventTime(ev);
+      if (!dt) continue;
+      if (dt < start30) continue;
+
+      all++;
+      const res = (ev?.result || "").toLowerCase();
+      if (res === "granted") granted++;
+      else denied++;
+
+      if (dt >= startToday) today++;
+
+      const user = ev?.user || "-";
+      perUser.set(user, (perUser.get(user) || 0) + 1);
+
+      const groups = Array.isArray(ev?.groups) ? ev.groups : (ev?.groups ? [ev.groups] : []);
+      for (const g of groups){
+        const gg = String(g || "-");
+        perGroup.set(gg, (perGroup.get(gg) || 0) + 1);
+      }
+
+      const src = ev?.source || "?";
+      const obj = perSource.get(src) || { granted:0, denied:0, total:0 };
+      obj.total++;
+      if (res === "granted") obj.granted++; else obj.denied++;
+      perSource.set(src, obj);
+    }
+
+    $("kAll").textContent = String(all);
+    $("kGranted").textContent = String(granted);
+    $("kDenied").textContent = String(denied);
+    $("kToday").textContent = String(today);
+
+    const topUser = topN(perUser, 5);
+    const topGroup = topN(perGroup, 5);
+
+    const tbody = $("statsTop");
+    tbody.innerHTML = "";
+
+    const rows = Math.max(topUser.length, topGroup.length, 1);
+    for (let i=0;i<rows;i++){
+      const tr = document.createElement("tr");
+
+      const tu = topUser[i] || ["-", 0];
+      const tg = topGroup[i] || ["-", 0];
+
+      const td1 = document.createElement("td"); td1.textContent = tu[0];
+      const td2 = document.createElement("td"); td2.textContent = String(tu[1]);
+      const td3 = document.createElement("td"); td3.textContent = tg[0];
+      const td4 = document.createElement("td"); td4.textContent = String(tg[1]);
+
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      tbody.appendChild(tr);
+    }
+
+    const sbody = $("statsSources");
+    sbody.innerHTML = "";
+    const srcSorted = Array.from(perSource.entries()).sort((a,b)=>b[1].total-a[1].total);
+    for (const [src, o] of srcSorted){
+      const tr = document.createElement("tr");
+      const td1 = document.createElement("td"); td1.textContent = src;
+      const td2 = document.createElement("td"); td2.textContent = String(o.granted);
+      const td3 = document.createElement("td"); td3.textContent = String(o.denied);
+      const td4 = document.createElement("td"); td4.textContent = String(o.total);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      sbody.appendChild(tr);
+    }
+
+    setStatsStatus(`Berechnet aus ${all} Events (letzte 30 Tage)`);
+  }
+
+  // NEW: Log aus Datei laden (www -> /local)
+  async function loadLogFromFile(){
+    try{
+      setLogStatus("Lade Logfile…");
+      // Cache umgehen
+      const url = state.logUrl + "?t=" + Date.now();
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const txt = await r.text();
+      const lines = txt.split("\n").map(x=>x.trim()).filter(Boolean);
+
+      const parsed = [];
+      for (const line of lines){
+        try { parsed.push(JSON.parse(line)); } catch(e){ /* ignore */ }
+      }
+      state.access_log = parsed;
+      $("logCount").textContent = String(parsed.length);
+      setLogStatus(`Log geladen (${parsed.length})`);
+      return true;
+    } catch(e){
+      state.access_log = [];
+      $("logCount").textContent = "0";
+      setLogStatus("Logfile Fehler: " + e.message);
+      return false;
+    }
+  }
+
+  async function loadAll(){
+    // Users/Groups kommen weiterhin via WS aus deiner Integration
+    if (!state.connected) return;
+    try{
+      setStatus("Lade…");
+      setGroupsStatus("Lade…");
+      setStatsStatus("Lade…");
+
+      const st = await call("zutritt_manager/get_state");
+      state.users = Array.isArray(st.users) ? st.users : [];
+      state.groups = Array.isArray(st.groups) ? st.groups : [];
+
+      // Log kommt aus Datei (nicht aus WS)
+      await loadLogFromFile();
+
+      if (!state.selectedId && state.users.length) state.selectedId = state.users[0].id;
+      if (state.selectedId && !state.users.some(u => u.id === state.selectedId)) state.selectedId = state.users[0]?.id || null;
+
+      renderList();
+      renderEditor();
+      renderGroupsList();
+      renderLog();
+      renderStats();
+
+      setStatus("Geladen");
+      setGroupsStatus("Geladen");
+    } catch(e){
+      setStatus("Fehler: " + e.message);
+      setGroupsStatus("Fehler: " + e.message);
+      setLogStatus("Fehler: " + e.message);
+      setStatsStatus("Fehler: " + e.message);
+      console.error(e);
+    }
+  }
+
+  async function addUser(){
+    if (!state.connected) return;
+    const name = prompt("Neuer Benutzername:");
+    if (!name) return;
+    setStatus("Lege an…");
+    try{
+      await call("zutritt_manager/add_user", { name });
+      await loadAll();
+      setStatus("User angelegt");
+    } catch(e){
+      setStatus("Fehler: " + e.message);
+    }
+  }
+
+  async function saveUser(){
+    if (!state.connected) return;
+    const u = state.users.find(x => x.id === state.selectedId);
+    if (!u) return;
+
+    const pinsInput = $("uPins").value.trim();
+    const pinsCsv = pinsInput ? pinsInput : "__KEEP__";
+
+    const groups = getSelectedGroupsFromUI();
+    const groupsCsv = groups.join(",");
+
+    const payload = {
+      user_id: u.id,
+      name: $("uName").value.trim(),
+      enabled: $("uEnabled").checked,
+      groups_csv: groupsCsv,
+      rfids_csv: $("uRfids").value.trim(),
+      pins_csv: pinsCsv,
+    };
+
+    setStatus("Speichere…");
+    try{
+      await call("zutritt_manager/update_user", payload);
+      $("uPins").value = "";
+      await loadAll();
+      const uu = state.users.find(x => x.id === state.selectedId);
+      setStatus("Gespeichert" + (uu ? ` (PINs: ${(uu.pin_hashes||[]).length})` : ""));
+    } catch(e){
+      setStatus("Fehler: " + e.message);
+    }
+  }
+
+  async function deleteUser(){
+    if (!state.connected) return;
+    const u = state.users.find(x => x.id === state.selectedId);
+    if (!u) return;
+    if (!confirm(`Benutzer "${u.name}" wirklich löschen?`)) return;
+
+    setStatus("Lösche…");
+    try{
+      await call("zutritt_manager/delete_user", { user_id: u.id });
+      state.selectedId = null;
+      await loadAll();
+      setStatus("Gelöscht");
+    } catch(e){
+      setStatus("Fehler: " + e.message);
+    }
+  }
+
+  async function addGroup(){
+    if (!state.connected) return;
+    const g = $("newGroup").value.trim();
+    if (!g) return;
+    try{
+      setGroupsStatus("Füge hinzu…");
+      await call("zutritt_manager/add_group", { group: g });
+      $("newGroup").value = "";
+      await loadAll();
+      setGroupsStatus("Hinzugefügt");
+    } catch(e){
+      setGroupsStatus("Fehler: " + e.message);
+    }
+  }
+
+  function connect(){
+    const token = getBestToken();
+    if (!token){
+      setTokenState("Kein Token gefunden (Auto+Manuell leer).");
+      setWsUI(false, "kein Token");
+      return;
+    }
+
+    safeClose();
+    setWsUI(false, "verbinde…");
+
+    const ws = new WebSocket(wsUrl());
+    state.ws = ws;
+
+    ws.onopen = () => ws.send(JSON.stringify({ type: "auth", access_token: token }));
+
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch(e){ return; }
+
+      if (msg.type === "auth_ok"){
+        state.connected = true;
+        setWsUI(true, "verbunden");
+        setTokenState(getAutoToken() ? "Auto-Token aktiv" : "Manueller Token aktiv");
+        loadAll();
+        return;
+      }
+
+      if (msg.type === "auth_invalid"){
+        state.connected = false;
+        setWsUI(false, "auth_invalid");
+        setStatus("Auth fehlgeschlagen (Token falsch).");
+        safeClose();
+        return;
+      }
+
+      if (typeof msg.id === "number" && state.pending.has(msg.id)){
+        const { resolve, reject } = state.pending.get(msg.id);
+        state.pending.delete(msg.id);
+        if (msg.type === "result") resolve(msg.result);
+        else if (msg.type === "error") reject(new Error(msg.error?.message || "WS error"));
+        else resolve(msg);
+      }
+    };
+
+    ws.onclose = () => {
+      state.connected = false;
+      setWsUI(false, "getrennt");
+      setStatus("Getrennt.");
+      setGroupsStatus("Getrennt.");
+      setLogStatus("Getrennt.");
+      setStatsStatus("Getrennt.");
+    };
+
+    ws.onerror = () => {
+      state.connected = false;
+      setWsUI(false, "ws error");
+      setStatus("WebSocket Fehler");
+    };
+  }
+
+  function disconnect(){
+    safeClose();
+    setStatus("Getrennt");
+    setGroupsStatus("Getrennt");
+    setLogStatus("Getrennt");
+    setStatsStatus("Getrennt");
+  }
+
+  // UI wire-up
+  document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  $("btnReload").addEventListener("click", () => loadAll());
+  $("btnAdd").addEventListener("click", () => addUser());
+  $("btnSave").addEventListener("click", () => saveUser());
+  $("btnDelete").addEventListener("click", () => deleteUser());
+  $("btnGroupsReload").addEventListener("click", () => loadAll());
+  $("btnAddGroup").addEventListener("click", () => addGroup());
+  $("newGroup").addEventListener("keydown", (e) => { if (e.key === "Enter") addGroup(); });
+  $("search").addEventListener("input", () => renderList());
+
+  $("btnLogRefresh").addEventListener("click", async () => { await loadLogFromFile(); renderLog(); renderStats(); });
+  $("btnLogTop").addEventListener("click", () => renderLog());
+  $("btnStatsRecalc").addEventListener("click", async () => { await loadLogFromFile(); renderStats(); });
+
+  $("btnAutoToken").addEventListener("click", () => {
+    const t = getAutoToken();
+    setTokenState(t ? "Auto-Token gefunden" : "Auto-Token nicht vorhanden");
+  });
+
+  $("btnSaveToken").addEventListener("click", () => {
+    const t = $("manualToken").value.trim();
+    if (!t) { setTokenState("Nichts eingegeben"); return; }
+    localStorage.setItem("zutritt_manager_llat", t);
+    setTokenState("Manueller Token gespeichert");
+    // Dropdown schließen optional:
+    // $("tokenDrop").open = false;
+  });
+
+  $("btnClearToken").addEventListener("click", () => {
+    localStorage.removeItem("zutritt_manager_llat");
+    $("manualToken").value = "";
+    setTokenState("Manueller Token gelöscht");
+  });
+
+  $("btnConnect").addEventListener("click", () => connect());
+  $("btnDisconnect").addEventListener("click", () => disconnect());
+
+  // initial
+  setWsUI(false, "getrennt");
+  setStatus("Nicht verbunden");
+  setGroupsStatus("Nicht verbunden");
+  setLogStatus("Nicht verbunden");
+  setStatsStatus("Nicht verbunden");
+  $("logCount").textContent = "0";
+  const hasAuto = !!getAutoToken();
+  const hasManual = !!getManualToken();
+  setTokenState(`Auto: ${hasAuto ? "ja" : "nein"} | Manuell: ${hasManual ? "ja" : "nein"}`);
+})();
+</script>
+</body>
+</html>
